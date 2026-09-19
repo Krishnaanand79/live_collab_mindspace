@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard';
 import Room from './pages/Room';
 import History from './pages/History';
 import Settings from './pages/Settings';
+import Landing from './pages/Landing';
 
 export const ThemeContext = createContext();
 
@@ -23,13 +24,15 @@ function App() {
     <ThemeContext.Provider value={{ theme, toggleTheme }}>
       <Router>
         <Routes>
+          <Route path="/" element={<Landing />} />
+          <Route path="/landing" element={<Landing />} />
           <Route path="/login" element={<Login />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/room/:roomId" element={<Room />} />
           <Route path="/room" element={<Room />} />
           <Route path="/history" element={<History />} />
           <Route path="/settings" element={<Settings />} />
-          <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Router>
     </ThemeContext.Provider>
