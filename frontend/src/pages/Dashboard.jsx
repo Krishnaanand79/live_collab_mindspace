@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Plus, Users, MonitorSpeaker, Clock, ArrowRight, Play, Sun, Moon, Inbox } from 'lucide-react';
+import { Search, Plus, Users, MonitorSpeaker, Clock, ArrowRight, Play, Sun, Moon, Inbox, Key, X, Sparkles, AlertCircle } from 'lucide-react';
 import { ThemeContext } from '../App';
 import { apiBaseUrl } from '../config';
 import './Dashboard.css';
@@ -15,6 +15,20 @@ const Dashboard = () => {
   const [showDropdown, setShowDropdown] = useState(false);
   const [isCreatingRoom, setIsCreatingRoom] = useState(false);
   const [userName, setUserName] = useState('Collaborator');
+
+  // Modal & Toast states
+  const [showJoinModal, setShowJoinModal] = useState(false);
+  const [joinRoomCode, setJoinRoomCode] = useState('');
+  const [joinModalError, setJoinModalError] = useState('');
+  const [isVerifyingRoom, setIsVerifyingRoom] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+
+  const showToast = (msg) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage(prev => prev === msg ? '' : prev);
+    }, 3500);
+  };
 
   useEffect(() => {
     const savedUser = JSON.parse(localStorage.getItem('user') || 'null');
@@ -66,36 +80,122 @@ const Dashboard = () => {
       if (data.success) {
         navigate(`/room/${data.roomId}`);
       } else {
-        alert(`Could not create room: ${data.error || 'Unknown error'}`);
+        showToast(`Could not create room: ${data.error || 'Unknown error'}`);
       }
     } catch (err) {
       console.error("Failed to create room", err);
-      alert('Could not create room. Please make sure backend is running on port 3001.');
+      showToast('Could not create room. Please make sure backend is running on port 3001.');
     } finally {
       setIsCreatingRoom(false);
     }
   };
 
-  const joinRoomByCode = async () => {
-    const input = window.prompt('Enter room code');
-    const code = (input || '').trim().toUpperCase();
+  const openJoinModal = () => {
+    setShowJoinModal(true);
+    setJoinModalError('');
+    setJoinRoomCode('');
+  };
+
+  const handleJoinModalSubmit = async (e) => {
+    if (e) e.preventDefault();
+    const code = joinRoomCode.trim().toUpperCase();
     if (!code) {
+      setJoinModalError('Please enter a 6-character room code');
       return;
     }
+    setIsVerifyingRoom(true);
+    setJoinModalError('');
     try {
       const res = await fetch(`${apiBaseUrl}/api/room/${code}`);
       if (!res.ok) {
-        alert('Room not found. Please check the room code.');
+        setJoinModalError('Room not found. Please check the code and try again.');
+        setIsVerifyingRoom(false);
         return;
       }
+      setShowJoinModal(false);
       navigate(`/room/${code}`);
     } catch {
-      alert('Could not verify room. Please check backend connection and try again.');
+      setJoinModalError('Could not connect to server. Please check backend.');
+      setIsVerifyingRoom(false);
     }
   };
 
   return (
     <div className="dashboard-container">
+      {/* Animated Toast Notification */}
+      {toastMessage && (
+        <div className="dashboard-toast" role="status">
+          <Sparkles size={16} className="text-gradient" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
+      {/* Glassmorphic Join Room Modal */}
+      {showJoinModal && (
+        <div className="join-modal-overlay" onClick={() => setShowJoinModal(false)}>
+          <div className="join-modal glass-card" onClick={e => e.stopPropagation()}>
+            <div className="join-modal-header">
+              <div className="flex-align" style={{ gap: '0.6rem' }}>
+                <Key size={20} className="text-gradient" />
+                <h3>Join Collaboration Room</h3>
+              </div>
+              <button 
+                type="button" 
+                className="icon-btn-sm" 
+                onClick={() => setShowJoinModal(false)}
+                aria-label="Close modal"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            
+            <p className="text-secondary text-sm" style={{ marginBottom: '1.25rem' }}>
+              Enter the unique 6-character room code shared by your team.
+            </p>
+
+            <form onSubmit={handleJoinModalSubmit}>
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <input
+                  type="text"
+                  className="input-glass join-modal-input"
+                  placeholder="e.g. 60JAZK"
+                  value={joinRoomCode}
+                  maxLength={10}
+                  autoFocus
+                  onChange={e => {
+                    setJoinRoomCode(e.target.value.toUpperCase());
+                    setJoinModalError('');
+                  }}
+                />
+                {joinModalError && (
+                  <div className="join-modal-error">
+                    <AlertCircle size={14} />
+                    <span>{joinModalError}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="join-modal-actions">
+                <button 
+                  type="button" 
+                  className="btn-secondary" 
+                  onClick={() => setShowJoinModal(false)}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  className="btn-primary" 
+                  disabled={isVerifyingRoom || !joinRoomCode.trim()}
+                >
+                  {isVerifyingRoom ? 'Connecting...' : 'Join Space'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Top Navbar */}
       <nav className="glass navbar">
         <div className="navbar-left">
@@ -115,7 +215,12 @@ const Dashboard = () => {
           <button className="icon-btn glass-panel" onClick={toggleTheme}>
             {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
           </button>
-          <button className="btn-secondary" onClick={joinRoomByCode}>Join Room</button>
+          <button 
+            className="btn-secondary" 
+            onClick={openJoinModal}
+          >
+            Join Room
+          </button>
           <button className="btn-primary flex-center" onClick={createRoom} disabled={isCreatingRoom}>
             <Plus size={18} style={{ marginRight: '0.5rem' }} /> {isCreatingRoom ? 'Creating...' : 'New Room'}
           </button>
@@ -154,7 +259,7 @@ const Dashboard = () => {
             <p className="text-secondary">Start a new blank workspace</p>
           </div>
           
-          <div className="glass-card action-card bounce-hover" onClick={joinRoomByCode}>
+          <div className="glass-card action-card bounce-hover" onClick={openJoinModal}>
             <div className="icon-wrapper">
               <Users size={24} className="text-gradient" />
             </div>

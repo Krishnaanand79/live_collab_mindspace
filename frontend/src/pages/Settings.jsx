@@ -1,6 +1,6 @@
 import React, { useContext, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, User, Video, Mic, Bell, Sparkles, MonitorSpeaker } from 'lucide-react';
+import { ArrowLeft, User, Video, Mic, Bell, Sparkles, MonitorSpeaker, CheckCircle2 } from 'lucide-react';
 import { ThemeContext } from '../App';
 import './Settings.css';
 
@@ -8,6 +8,33 @@ const Settings = () => {
   const navigate = useNavigate();
   const { theme, toggleTheme } = useContext(ThemeContext);
   const [activeTab, setActiveTab] = useState('profile');
+
+  const [displayName, setDisplayName] = useState(() => {
+    const saved = JSON.parse(localStorage.getItem('user') || '{}');
+    return saved.name || 'Krishna Anand';
+  });
+  const [email, setEmail] = useState(() => {
+    const saved = JSON.parse(localStorage.getItem('user') || '{}');
+    return saved.email || 'krishnaanand1207@gmail.com';
+  });
+  const [aiPersona, setAiPersona] = useState(() => {
+    return localStorage.getItem('livecollab_ai_persona') || 'agentic';
+  });
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  const handleSave = (e) => {
+    if (e) e.preventDefault();
+    const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+    const updated = {
+      ...currentUser,
+      name: displayName.trim() || 'Collaborator',
+      email: email.trim()
+    };
+    localStorage.setItem('user', JSON.stringify(updated));
+    localStorage.setItem('livecollab_ai_persona', aiPersona);
+    setSaveSuccess(true);
+    setTimeout(() => setSaveSuccess(false), 3000);
+  };
 
   const tabs = [
     { id: 'profile', icon: User, label: 'Profile' },
@@ -21,7 +48,7 @@ const Settings = () => {
       {/* Header */}
       <nav className="glass history-navbar">
         <div className="navbar-left">
-          <button className="icon-btn glass-panel" onClick={() => navigate('/dashboard')}>
+          <button className="icon-btn glass-panel" onClick={() => navigate('/dashboard')} aria-label="Back to dashboard">
             <ArrowLeft size={20} />
           </button>
           <h2 className="logo" style={{ marginLeft: '1rem' }} onClick={() => navigate('/dashboard')}>
@@ -35,6 +62,13 @@ const Settings = () => {
           <h1>Settings</h1>
           <p className="text-secondary">Manage your preferences and workspace configuration.</p>
         </header>
+
+        {saveSuccess && (
+          <div className="settings-save-toast flex-align">
+            <CheckCircle2 size={18} className="text-gradient" />
+            <span>Settings saved successfully!</span>
+          </div>
+        )}
 
         <div className="settings-layout">
           {/* Settings Sidebar */}
@@ -58,16 +92,26 @@ const Settings = () => {
                 <h3>Profile Information</h3>
                 <div className="profile-edit">
                   <img src="https://i.pravatar.cc/150?img=11" alt="Avatar" className="profile-avatar" />
-                  <button className="btn-secondary btn-sm">Change Avatar</button>
+                  <button className="btn-secondary btn-sm" onClick={() => handleSave()}>Update Avatar</button>
                 </div>
                 <div className="form-group-row">
                   <div className="form-group">
                     <label>Display Name</label>
-                    <input type="text" className="input-glass" defaultValue="Alex Developer" />
+                    <input 
+                      type="text" 
+                      className="input-glass" 
+                      value={displayName}
+                      onChange={e => setDisplayName(e.target.value)}
+                    />
                   </div>
                   <div className="form-group">
                     <label>Email Space</label>
-                    <input type="email" className="input-glass" defaultValue="alex@company.com" disabled />
+                    <input 
+                      type="email" 
+                      className="input-glass" 
+                      value={email}
+                      onChange={e => setEmail(e.target.value)}
+                    />
                   </div>
                 </div>
                 
@@ -84,7 +128,9 @@ const Settings = () => {
                 </div>
                 
                 <div className="settings-actions">
-                  <button className="btn-primary">Save Changes</button>
+                  <button className="btn-primary" onClick={handleSave}>
+                    Save Changes
+                  </button>
                 </div>
               </div>
             )}

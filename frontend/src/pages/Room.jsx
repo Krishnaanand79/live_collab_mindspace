@@ -13,7 +13,7 @@ import { wsBaseUrl, apiBaseUrl } from '../config';
 import { ThemeContext } from '../App';
 import './Room.css';
 
-const cleanLatexMath = (str) => {
+export const cleanLatexMath = (str) => {
   if (!str) return '';
 
   // Preserve agent_action block if present
@@ -52,7 +52,7 @@ const cleanLatexMath = (str) => {
 };
 
 // Pre-defined Agentic AI Workspace Templates & Flowcharts
-const PRESET_ACTIONS = {
+export const PRESET_ACTIONS = {
   photosynthesis: {
     type: 'flowchart',
     title: '🌿 Photosynthesis Lifecycle Flowchart',
@@ -122,7 +122,7 @@ const PRESET_ACTIONS = {
   }
 };
 
-const renderMarkdown = (text, onApplyAction, appliedActionIds = []) => {
+export const renderMarkdown = (text, onApplyAction, appliedActionIds = []) => {
   if (!text) return null;
 
   let agentActionData = null;
@@ -772,7 +772,6 @@ const Room = () => {
   // WebSockets Setup
   useEffect(() => {
     if (!roomId) {
-      alert('Please enter a room code to join.');
       navigate('/dashboard');
       return;
     }
@@ -810,7 +809,6 @@ const Room = () => {
         }
       } else if (data.type === 'error') {
         setJoinError(data.message || 'Unable to join room');
-        alert(data.message || 'Unable to join room');
         navigate('/dashboard');
       } else if (data.type === 'chat') {
         setMessages(prev => [...prev, data]);
@@ -2536,8 +2534,10 @@ const Room = () => {
   }, []);
 
   const copyRoomLink = () => {
-    navigator.clipboard.writeText(window.location.href);
-    alert('Room link copied to clipboard!');
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(window.location.href);
+    }
+    triggerToast('🔗 Room link copied to clipboard!');
   };
 
   return (
@@ -3403,16 +3403,7 @@ const Room = () => {
           <button 
             title="Settings" 
             className="control-btn bounce-hover"
-            onClick={() => {
-              const newName = prompt("Enter your name:", JSON.parse(localStorage.getItem('user') || '{}').name || "User");
-              if (newName) {
-                const userObj = JSON.parse(localStorage.getItem('user') || '{}');
-                userObj.name = newName;
-                localStorage.setItem('user', JSON.stringify(userObj));
-                alert("Username updated to: " + newName);
-                window.location.reload();
-              }
-            }}
+            onClick={() => navigate('/settings')}
           >
             <Settings size={20} />
           </button>

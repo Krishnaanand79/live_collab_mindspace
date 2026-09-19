@@ -379,7 +379,10 @@ app.get('/api/dashboard', async (req, res) => {
     });
   }
 
-  res.json({ recentRooms: activeRooms.slice(0, 6) });
+  res.json({ 
+    recentRooms: activeRooms.slice(0, 6),
+    totalRooms: activeRooms.length
+  });
 });
 
 // History

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Mail, Lock, LogIn, Key, Sparkles } from 'lucide-react';
+import { Mail, Lock, LogIn, Key, Sparkles, AlertCircle, CheckCircle, X } from 'lucide-react';
 import { GoogleLogin } from '@react-oauth/google';
 import { apiBaseUrl } from '../config';
 import './Login.css';
@@ -12,15 +12,20 @@ const Login = () => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [authNotification, setAuthNotification] = useState(null);
 
   const handleLogin = (e) => {
     e.preventDefault();
+    setAuthNotification(null);
     const accounts = JSON.parse(localStorage.getItem('livecollab_accounts') || '[]');
 
     if (isSignUp) {
       const existing = accounts.find(acc => acc.email.toLowerCase() === email.trim().toLowerCase());
       if (existing) {
-        alert('An account with this email already exists. Please sign in.');
+        setAuthNotification({
+          type: 'error',
+          message: 'An account with this email already exists. Please sign in.'
+        });
         setIsSignUp(false);
         return;
       }
@@ -42,7 +47,10 @@ const Login = () => {
       acc => acc.email.toLowerCase() === email.trim().toLowerCase() && acc.password === password
     );
     if (!account) {
-      alert('Invalid email or password. If you are new, click Create one.');
+      setAuthNotification({
+        type: 'error',
+        message: 'Invalid email or password. If you are new, click Create one.'
+      });
       return;
     }
 
@@ -57,6 +65,7 @@ const Login = () => {
 
   const handleJoinRoom = (e) => {
     e.preventDefault();
+    setAuthNotification(null);
     const code = roomCode.trim().toUpperCase();
     if (code) {
       fetch(`${apiBaseUrl}/api/room/${code}`)
@@ -67,13 +76,17 @@ const Login = () => {
           navigate(`/room/${code}`);
         })
         .catch(() => {
-          alert('Room not found. Please check the code and try again.');
+          setAuthNotification({
+            type: 'error',
+            message: 'Room not found. Please check the code and try again.'
+          });
         });
     }
   };
 
   const handleGoogleSuccess = async (credentialResponse) => {
     try {
+      setAuthNotification(null);
       const res = await fetch(`${apiBaseUrl}/api/auth/google`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -86,16 +99,26 @@ const Login = () => {
         navigate('/dashboard');
       } else {
         const detailText = data.details ? ` (${data.details})` : '';
-        alert(`Authentication failed: ${data.error || 'Unknown error'}${detailText}`);
+        setAuthNotification({
+          type: 'error',
+          message: `Authentication failed: ${data.error || 'Unknown error'}${detailText}`
+        });
       }
     } catch (err) {
       console.error(err);
-      alert("Error reaching authentication server.");
+      setAuthNotification({
+        type: 'error',
+        message: 'Error reaching authentication server.'
+      });
     }
   };
 
   const handleGoogleError = () => {
     console.error('Login Failed');
+    setAuthNotification({
+      type: 'error',
+      message: 'Google Sign-In was cancelled or failed.'
+    });
   };
 
   return (
@@ -169,6 +192,21 @@ const Login = () => {
               {isSignUp ? 'Create your account to get started.' : 'Please enter your details to sign in.'}
             </p>
           </div>
+
+          {authNotification && (
+            <div className={`auth-banner auth-banner-${authNotification.type}`} role="alert">
+              {authNotification.type === 'error' ? <AlertCircle size={18} className="auth-banner-icon" /> : <CheckCircle size={18} className="auth-banner-icon" />}
+              <span className="auth-banner-text">{authNotification.message}</span>
+              <button 
+                type="button" 
+                className="auth-banner-close" 
+                onClick={() => setAuthNotification(null)}
+                aria-label="Dismiss notification"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          )}
 
           <form onSubmit={handleLogin} className="auth-form">
             {isSignUp && (

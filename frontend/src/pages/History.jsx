@@ -9,11 +9,12 @@ const History = () => {
   const navigate = useNavigate();
   const [sessions, setSessions] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     const fetchHistory = async () => {
       try {
-          const response = await fetch(`${apiBaseUrl}/api/history`);
+        const response = await fetch(`${apiBaseUrl}/api/history`);
         const data = await response.json();
         setSessions(data.sessions || []);
       } catch (err) {
@@ -25,12 +26,43 @@ const History = () => {
     fetchHistory();
   }, []);
 
+  const downloadNotes = (session) => {
+    const content = `# Collaboration Notes: ${session.title}
+Date: ${new Date(session.date).toLocaleString()}
+Duration: ${session.duration}
+Participants: ${session.participants}
+Room Code: ${session.roomId}
+
+## AI Executive Summary
+${session.aiSummary || 'No summary recorded.'}
+`;
+    const blob = new Blob([content], { type: 'text/markdown;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `${(session.title || 'session').replace(/\s+/g, '_')}_notes.md`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const filteredSessions = sessions.filter(session => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      (session.title && session.title.toLowerCase().includes(q)) ||
+      (session.aiSummary && session.aiSummary.toLowerCase().includes(q)) ||
+      (session.roomId && session.roomId.toLowerCase().includes(q))
+    );
+  });
+
   return (
     <div className="history-container">
       {/* Header */}
       <nav className="glass history-navbar">
         <div className="navbar-left">
-          <button className="icon-btn glass-panel" onClick={() => navigate('/dashboard')}>
+          <button className="icon-btn glass-panel" onClick={() => navigate('/dashboard')} aria-label="Back to dashboard">
             <ArrowLeft size={20} />
           </button>
           <h2 className="logo" style={{ marginLeft: '1rem' }} onClick={() => navigate('/dashboard')}>
@@ -48,10 +80,17 @@ const History = () => {
           <div className="filters glass-panel">
             <div className="search-box">
               <Search size={16} className="text-secondary"/>
-              <input type="text" placeholder="Search sessions..." />
+              <input 
+                type="text" 
+                placeholder="Search sessions..." 
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+              />
             </div>
             <div className="vertical-divider"></div>
-            <button className="btn-text text-secondary"><Filter size={16}/> Filter</button>
+            <button className="btn-text text-secondary" onClick={() => setSearchQuery('')}>
+              <Filter size={16}/> Clear
+            </button>
           </div>
         </header>
 
@@ -72,13 +111,13 @@ const History = () => {
                 </div>
               </div>
             ))
-          ) : sessions.length > 0 ? (
+          ) : filteredSessions.length > 0 ? (
             // Loaded State
-            sessions.map((session, index) => (
+            filteredSessions.map((session, index) => (
               <div key={session.id} className="timeline-item">
                 <div className="timeline-marker">
                   <div className="marker-dot"></div>
-                  {index !== sessions.length - 1 && <div className="marker-line"></div>}
+                  {index !== filteredSessions.length - 1 && <div className="marker-line"></div>}
                 </div>
                 
                 <div className="timeline-content glass-card bounce-hover">
@@ -102,7 +141,7 @@ const History = () => {
                     <button className="btn-secondary btn-sm" onClick={() => navigate(`/room/${session.roomId}`)}>
                       Reopen Space
                     </button>
-                    <button className="btn-secondary btn-sm">
+                    <button className="btn-secondary btn-sm" onClick={() => downloadNotes(session)}>
                       <Download size={16} style={{marginRight:'0.4rem'}}/> Notes
                     </button>
                     {session.recordingAvailable && (
@@ -120,8 +159,12 @@ const History = () => {
               <div className="empty-icon-wrap">
                 <Inbox size={32} className="text-secondary" />
               </div>
-              <h3>No Past Collaborations</h3>
-              <p className="text-secondary">It looks like you haven't had any sessions yet. Once you complete a room, your AI-generated summaries will appear here.</p>
+              <h3>{searchQuery ? 'No Matching Sessions' : 'No Past Collaborations'}</h3>
+              <p className="text-secondary">
+                {searchQuery 
+                  ? `No collaboration sessions matched "${searchQuery}". Try a different keyword or clear the search.`
+                  : "It looks like you haven't had any sessions yet. Once you complete a room, your AI-generated summaries will appear here."}
+              </p>
             </div>
           )}
         </div>
