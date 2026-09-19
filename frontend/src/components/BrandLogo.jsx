@@ -1,9 +1,17 @@
 import React from 'react';
 import './BrandLogo.css';
 
-export default function BrandLogo({ size = 38, showText = true, showBadge = false, className = '' }) {
+export default function BrandLogo({ 
+  size = 38, 
+  showText = true, 
+  showBadge = false, 
+  badgeText = 'ENTERPRISE',
+  lightText = false,
+  textSize = 'default',
+  className = '' 
+}) {
   return (
-    <div className={`brand-logo-container ${className}`}>
+    <div className={`brand-logo-container ${lightText ? 'light-text' : ''} text-size-${textSize} ${className}`}>
       <div className="brand-logo-emblem-wrap" style={{ width: size, height: size }}>
         <img 
           src="/logo.png" 
@@ -19,10 +27,11 @@ export default function BrandLogo({ size = 38, showText = true, showBadge = fals
             <span className="brand-suffix">MindSpace</span>
           </div>
           {showBadge && (
-            <span className="brand-edition-pill">ENTERPRISE</span>
+            <span className="brand-edition-pill">{badgeText}</span>
           )}
         </div>
       )}
     </div>
   );
 }
+

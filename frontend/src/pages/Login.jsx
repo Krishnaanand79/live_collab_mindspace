@@ -163,11 +163,18 @@ const Login = () => {
         <div className="hero-content">
           <div className="hero-badge-pill">
             <span className="pulse-dot"></span>
-            <span>LIVECOLLAB MINDSPACE • NEXT-GEN AI WHITEBOARD</span>
+            <span>NEXT-GEN ENTERPRISE COLLABORATIVE CANVAS</span>
           </div>
 
           <div className="hero-brand-wrap">
-            <BrandLogo size={52} showText={true} showBadge={true} />
+            <BrandLogo 
+              size={58} 
+              showText={true} 
+              showBadge={true} 
+              badgeText="ENTERPRISE"
+              lightText={true} 
+              textSize="hero" 
+            />
           </div>
 
           <h1 className="hero-headline">
