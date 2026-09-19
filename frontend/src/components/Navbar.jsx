@@ -10,7 +10,8 @@ import {
   Moon, 
   ChevronDown, 
   Sparkles,
-  Command
+  Command,
+  LogOut
 } from 'lucide-react';
 import { apiBaseUrl } from '../config';
 import BrandLogo from './BrandLogo';
@@ -22,6 +23,7 @@ export default function Navbar({ onOpenSearch, onNewRoom }) {
   const { theme, toggleTheme } = useContext(ThemeContext) || { theme: 'dark', toggleTheme: () => {} };
   const [workspaceDropdownOpen, setWorkspaceDropdownOpen] = useState(false);
   const [activeWorkspace, setActiveWorkspace] = useState('Personal Workspace');
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   const storedUser = JSON.parse(localStorage.getItem('user') || '{"name": "Krishna Anand"}');
   const userInitial = storedUser?.name ? storedUser.name.charAt(0).toUpperCase() : 'K';
@@ -31,6 +33,12 @@ export default function Navbar({ onOpenSearch, onNewRoom }) {
     { id: 'ws-2', name: 'MindSpace Engineering HQ', badge: 'TEAM' },
     { id: 'ws-3', name: 'AI Research Lab', badge: 'DEV' }
   ];
+
+  const handleLogout = () => {
+    setUserMenuOpen(false);
+    localStorage.removeItem('user');
+    navigate('/login');
+  };
 
   const handleWhiteboardClick = async (e) => {
     e.preventDefault();
@@ -170,13 +178,68 @@ export default function Navbar({ onOpenSearch, onNewRoom }) {
           <span>New Space</span>
         </button>
 
-        {/* User Profile Pill */}
-        <div 
-          className="nav-user-avatar"
-          onClick={() => navigate('/settings')}
-          title={`Signed in as ${storedUser?.name || 'Krishna Anand'}`}
-        >
-          <span>{userInitial}</span>
+        {/* User Profile Pill & Dropdown */}
+        <div className="nav-user-dropdown-wrapper">
+          <div 
+            className="nav-user-avatar"
+            onClick={() => setUserMenuOpen(!userMenuOpen)}
+            title={`Signed in as ${storedUser?.name || 'Krishna Anand'}`}
+            role="button"
+            aria-label="User Profile Menu"
+          >
+            <span>{userInitial}</span>
+          </div>
+
+          {userMenuOpen && (
+            <div className="user-dropdown-menu glass-panel">
+              <div className="user-dropdown-header">
+                <div className="user-dropdown-avatar">{userInitial}</div>
+                <div className="user-dropdown-info">
+                  <strong>{storedUser?.name || 'Krishna Anand'}</strong>
+                  <span className="user-dropdown-email">{storedUser?.email || 'krishnaanand1207@gmail.com'}</span>
+                </div>
+              </div>
+
+              <div className="user-dropdown-badge-row">
+                <span className="user-badge-pro">PRO ARCHITECT</span>
+                <span className="user-badge-status-dot">🟢 Online</span>
+              </div>
+
+              <div className="user-dropdown-divider" />
+
+              <button 
+                className="user-dropdown-item"
+                onClick={() => {
+                  setUserMenuOpen(false);
+                  navigate('/settings');
+                }}
+              >
+                <SettingsIcon size={15} />
+                <span>Profile & Settings</span>
+              </button>
+
+              <button 
+                className="user-dropdown-item"
+                onClick={() => {
+                  setUserMenuOpen(false);
+                  navigate('/history');
+                }}
+              >
+                <HistoryIcon size={15} />
+                <span>Session History</span>
+              </button>
+
+              <div className="user-dropdown-divider" />
+
+              <button 
+                className="user-dropdown-item text-danger"
+                onClick={handleLogout}
+              >
+                <LogOut size={15} />
+                <span>Sign Out</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </header>

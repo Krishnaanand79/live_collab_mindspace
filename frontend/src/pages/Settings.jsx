@@ -2,7 +2,7 @@ import React, { useContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   User, Video, Mic, Bell, Sparkles, CheckCircle2, 
-  Volume2, Sun, Moon, Check
+  Volume2, Sun, Moon, Check, LogOut
 } from 'lucide-react';
 import { ThemeContext } from '../App';
 import Navbar from '../components/Navbar';
@@ -227,6 +227,25 @@ const Settings = () => {
                 <div className="settings-actions" style={{ marginTop: '2rem' }}>
                   <button className="btn-primary" onClick={handleSave}>
                     Save Changes
+                  </button>
+                </div>
+
+                <div className="danger-zone-section glass-card" style={{ marginTop: '2.5rem', padding: '1.5rem', borderColor: 'rgba(239, 68, 68, 0.3)' }}>
+                  <h4 style={{ color: '#ef4444', marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                    <LogOut size={16} /> Active Session & Account
+                  </h4>
+                  <p className="text-secondary text-xs" style={{ marginBottom: '1.25rem' }}>
+                    Sign out of your active workspace session on this browser.
+                  </p>
+                  <button 
+                    type="button"
+                    className="btn-danger btn-sm"
+                    onClick={() => {
+                      localStorage.removeItem('user');
+                      navigate('/login');
+                    }}
+                  >
+                    <LogOut size={14} style={{ marginRight: '0.35rem' }} /> Sign Out
                   </button>
                 </div>
               </div>
