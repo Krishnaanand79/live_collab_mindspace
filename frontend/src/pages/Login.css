@@ -343,32 +343,62 @@
   position: relative;
   display: flex;
   align-items: center;
+  width: 100%;
 }
 
 .input-icon {
   position: absolute;
   left: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
   pointer-events: none;
+  z-index: 3;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s ease;
 }
 
+.input-icon-wrapper:focus-within .input-icon {
+  color: var(--accent-primary);
+}
+
+.login-form-side .input-glass.input-with-icon,
+.input-icon-wrapper input.input-glass,
+.input-icon-wrapper input.input-with-icon,
 .input-with-icon {
-  padding-left: 2.75rem;
+  padding-left: 3rem !important;
+  padding-right: 1.15rem;
+}
+
+.login-form-side .input-glass.input-with-icon#pass,
+.input-icon-wrapper input[type="password"].input-with-icon,
+.input-icon-wrapper input#pass.input-with-icon {
+  padding-right: 3rem !important;
 }
 
 .password-toggle-btn {
   position: absolute;
-  right: 0.75rem;
+  right: 0.85rem;
+  top: 50%;
+  transform: translateY(-50%);
   padding: 0.35rem;
   color: var(--text-secondary);
   border-radius: 6px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: color 0.2s;
+  z-index: 3;
+  transition: color 0.2s ease, background-color 0.2s ease;
 }
 
 .password-toggle-btn:hover {
   color: var(--text-primary);
+  background: rgba(0, 0, 0, 0.06);
 }
 
 .form-options {

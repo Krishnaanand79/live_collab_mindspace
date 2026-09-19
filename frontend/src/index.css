@@ -225,6 +225,10 @@ button {
   transition: all 0.3s var(--ease-spring);
 }
 
+.input-glass.input-with-icon {
+  padding-left: 2.85rem !important;
+}
+
 .input-glass:focus {
   outline: none;
   border-color: var(--accent-primary);

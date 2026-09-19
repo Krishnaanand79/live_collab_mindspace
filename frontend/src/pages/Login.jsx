@@ -1,6 +1,6 @@
 import React, { useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Mail, Lock, LogIn, Key, Sparkles, AlertCircle, CheckCircle, X, Zap, Eye, EyeOff, ShieldCheck, MousePointer, Activity, Sun, Moon } from 'lucide-react';
+import { Mail, Lock, LogIn, Key, Sparkles, AlertCircle, CheckCircle, X, Zap, Eye, EyeOff, ShieldCheck, MousePointer, Activity, Sun, Moon, User } from 'lucide-react';
 import { GoogleLogin } from '@react-oauth/google';
 import { apiBaseUrl } from '../config';
 import { ThemeContext } from '../App';
@@ -294,7 +294,7 @@ const Login = () => {
             {isSignUp && (
               <div className="form-group floating-input">
                 <div className="input-icon-wrapper">
-                  <Mail className="input-icon text-secondary" size={18} />
+                  <User className="input-icon text-secondary" size={18} />
                   <input
                     type="text"
                     className="input-glass input-with-icon"
