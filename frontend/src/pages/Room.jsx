@@ -1,0 +1,3425 @@
+import React, { useState, useEffect, useRef, useContext } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { 
+  MessageSquare, Users, FolderOpen, History as HistoryIcon, 
+  Pen, Type, StickyNote, Image as ImageIcon, Square, Circle, Eraser, Undo, Redo, MousePointer2,
+  Sparkles, ListTodo, FileText, CheckSquare, MessageCircle,
+  Mic, MicOff, Video, VideoOff, MonitorUp, PhoneOff, Hand, Settings,
+  Link, UserPlus, MoreHorizontal, Maximize2, Trash2, Send, Download, Grid,
+  Zap, GripHorizontal, Sun, Moon, X, Key,
+  ArrowUpRight, Minus, Wand2, LayoutTemplate, Bot
+} from 'lucide-react';
+import { wsBaseUrl, apiBaseUrl } from '../config';
+import { ThemeContext } from '../App';
+import './Room.css';
+
+const cleanLatexMath = (str) => {
+  if (!str) return '';
+
+  // Preserve agent_action block if present
+  let actionBlock = '';
+  let textToClean = str;
+  const match = str.match(/```agent_action[\s\S]*?```/);
+  if (match) {
+    actionBlock = match[0];
+    textToClean = str.replace(/```agent_action[\s\S]*?```/, '__AGENT_ACTION_BLOCK__');
+  }
+
+  const subMap = { '0': '₀', '1': '₁', '2': '₂', '3': '₃', '4': '₄', '5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉', '+': '₊', '-': '₋' };
+  const supMap = { '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹', '+': '⁺', '-': '⁻' };
+
+  let cleaned = textToClean
+    .replace(/\\(longrightarrow|rightarrow|to)/g, ' ➔ ')
+    .replace(/\\(longleftarrow|leftarrow)/g, ' ⬅ ')
+    .replace(/\\text\{([^{}]+)\}/g, '$1')
+    .replace(/\\mathbf\{([^{}]+)\}/g, '$1')
+    .replace(/\\math[a-zA-Z]+\{([^{}]+)\}/g, '$1')
+    .replace(/_\{([0-9+-]+)\}/g, (_, m) => m.split('').map(c => subMap[c] || c).join(''))
+    .replace(/_([0-9+-])/g, (_, c) => subMap[c] || c)
+    .replace(/\^\{([0-9+-]+)\}/g, (_, m) => m.split('').map(c => supMap[c] || c).join(''))
+    .replace(/\^([0-9+-])/g, (_, c) => supMap[c] || c)
+    .replace(/\$\$/g, '')
+    .replace(/\$/g, '')
+    .replace(/\\uparrow/g, '↑')
+    .replace(/\\downarrow/g, '↓')
+    .replace(/[ \t]{2,}/g, ' ');
+
+  if (actionBlock) {
+    cleaned = cleaned.replace('__AGENT_ACTION_BLOCK__', actionBlock);
+  }
+
+  return cleaned;
+};
+
+// Pre-defined Agentic AI Workspace Templates & Flowcharts
+const PRESET_ACTIONS = {
+  photosynthesis: {
+    type: 'flowchart',
+    title: '🌿 Photosynthesis Lifecycle Flowchart',
+    nodes: [
+      { id: 'sun', text: '☀️ Sunlight', x: 80, y: 140, w: 180, h: 55, color: '#f59e0b' },
+      { id: 'water', text: '💧 Water (H₂O)', x: 80, y: 240, w: 180, h: 55, color: '#3b82f6' },
+      { id: 'co2', text: '💨 CO₂ (Air)', x: 80, y: 340, w: 180, h: 55, color: '#8b5cf6' },
+      { id: 'chloro', text: '🌿 Chloroplast Hub', x: 360, y: 220, w: 200, h: 80, color: '#10b981' },
+      { id: 'glucose', text: '🍬 Glucose (Food)', x: 660, y: 180, w: 190, h: 55, color: '#ec4899' },
+      { id: 'o2', text: '🌬️ Oxygen (O₂ Gas)', x: 660, y: 300, w: 190, h: 55, color: '#06b6d4' }
+    ],
+    connectors: [
+      { from: 'sun', to: 'chloro' },
+      { from: 'water', to: 'chloro' },
+      { from: 'co2', to: 'chloro' },
+      { from: 'chloro', to: 'glucose' },
+      { from: 'chloro', to: 'o2' }
+    ],
+    stickies: [
+      { text: '☀️ Light Reaction: Thylakoid membranes capture solar photons, split H₂O, and generate energy.', color: 'yellow', x: 360, y: 340 },
+      { text: '🔄 Calvin Cycle: Stroma fluid fixes carbon dioxide into sugar (glucose) fuel.', color: 'green', x: 580, y: 340 }
+    ]
+  },
+  kanban: {
+    type: 'template',
+    title: '📋 Agile Sprint Kanban Board',
+    columns: [
+      { title: '📌 TO DO', x: 90, color: '#f59e0b' },
+      { title: '⚡ IN PROGRESS', x: 370, color: '#3b82f6' },
+      { title: '✅ COMPLETED', x: 650, color: '#10b981' }
+    ],
+    stickies: [
+      { text: 'Design collaborative whiteboard canvas architecture', color: 'yellow', x: 100, y: 160 },
+      { text: 'Integrate real-time WebSocket signaling listeners', color: 'blue', x: 380, y: 160 },
+      { text: 'Deploy Agentic AI Whiteboard Co-Pilot', color: 'green', x: 660, y: 160 }
+    ]
+  },
+  swot: {
+    type: 'template',
+    title: '📊 SWOT Strategic Analysis Matrix',
+    quadrants: [
+      { title: '💪 STRENGTHS', x: 100, y: 120, color: '#10b981' },
+      { title: '⚠️ WEAKNESSES', x: 480, y: 120, color: '#ef4444' },
+      { title: '🚀 OPPORTUNITIES', x: 100, y: 380, color: '#3b82f6' },
+      { title: '🛡️ THREATS', x: 480, y: 380, color: '#f59e0b' }
+    ],
+    stickies: [
+      { text: '60 FPS 2-layer HTML5 canvas with zero lag interaction', color: 'green', x: 110, y: 170 },
+      { text: 'Requires camera/mic permissions for multi-peer feeds', color: 'pink', x: 490, y: 170 },
+      { text: 'Agentic AI canvas generation & automated stickies', color: 'blue', x: 110, y: 430 },
+      { text: 'Client network latency on high participant density', color: 'yellow', x: 490, y: 430 }
+    ]
+  },
+  brainstorm: {
+    type: 'stickies',
+    title: '💡 Innovation Brainstorming Cluster',
+    stickies: [
+      { text: '🎙️ Hands-Free Speech Dictation for whiteboard planning', color: 'yellow', x: 100, y: 160 },
+      { text: '🪄 Autonomous Mind-Map generator with connector arrows', color: 'pink', x: 320, y: 160 },
+      { text: '🧹 1-Click Board Auto-Align to tidy scattered stickies', color: 'blue', x: 540, y: 160 },
+      { text: '🖼️ High-Res PNG export with all sticky notes preserved', color: 'green', x: 760, y: 160 }
+    ]
+  },
+  organize: {
+    type: 'organize',
+    title: '🧹 Smart Board Clean & Align'
+  }
+};
+
+const renderMarkdown = (text, onApplyAction, appliedActionIds = []) => {
+  if (!text) return null;
+
+  let agentActionData = null;
+  let markdownText = text;
+
+  // Extract agent_action JSON block if present
+  const actionMatch = text.match(/```agent_action\s*([\s\S]*?)\s*```/);
+  if (actionMatch) {
+    try {
+      agentActionData = JSON.parse(actionMatch[1].trim());
+      markdownText = text.replace(/```agent_action\s*[\s\S]*?\s*```/, '').trim();
+    } catch (e) {
+      console.warn('Failed to parse agent_action JSON:', e);
+    }
+  }
+
+  // Clean raw LaTeX and split text by lines
+  const cleaned = cleanLatexMath(markdownText);
+  const lines = cleaned.split('\n');
+  const elements = [];
+  let inCodeBlock = false;
+  let codeBlockLines = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    // Handle code blocks
+    if (line.trim().startsWith('```')) {
+      if (inCodeBlock) {
+        // Close code block
+        elements.push(
+          <pre key={`code-${i}`} style={{
+            background: 'rgba(0, 0, 0, 0.35)',
+            padding: '0.6rem 0.9rem',
+            borderRadius: '6px',
+            fontFamily: 'monospace',
+            fontSize: '0.8rem',
+            overflowX: 'auto',
+            margin: '0.6rem 0',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            color: '#34d399',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-all'
+          }}>
+            <code>{codeBlockLines.join('\n')}</code>
+          </pre>
+        );
+        codeBlockLines = [];
+        inCodeBlock = false;
+      } else {
+        inCodeBlock = true;
+      }
+      continue;
+    }
+
+    if (inCodeBlock) {
+      codeBlockLines.push(line);
+      continue;
+    }
+
+    // Process inline markdown (bold **text**, inline code `code`)
+    const processInline = (str) => {
+      let parts = [{ type: 'text', content: str }];
+      const boldRegex = /\*\*([^*]+)\*\*/g;
+      const codeRegex = /`([^`]+)`/g;
+
+      // Parse bold first
+      let newParts = [];
+      parts.forEach(part => {
+        if (part.type === 'text') {
+          let lastIndex = 0;
+          let match;
+          const content = part.content;
+          boldRegex.lastIndex = 0;
+          while ((match = boldRegex.exec(content)) !== null) {
+            if (match.index > lastIndex) {
+              newParts.push({ type: 'text', content: content.substring(lastIndex, match.index) });
+            }
+            newParts.push({ type: 'bold', content: match[1] });
+            lastIndex = boldRegex.lastIndex;
+          }
+          if (lastIndex < content.length) {
+            newParts.push({ type: 'text', content: content.substring(lastIndex) });
+          }
+        } else {
+          newParts.push(part);
+        }
+      });
+      parts = newParts;
+
+      // Parse inline code
+      newParts = [];
+      parts.forEach(part => {
+        if (part.type === 'text') {
+          let lastIndex = 0;
+          let match;
+          const content = part.content;
+          codeRegex.lastIndex = 0;
+          while ((match = codeRegex.exec(content)) !== null) {
+            if (match.index > lastIndex) {
+              newParts.push({ type: 'text', content: content.substring(lastIndex, match.index) });
+            }
+            newParts.push({ type: 'code', content: match[1] });
+            lastIndex = codeRegex.lastIndex;
+          }
+          if (lastIndex < content.length) {
+            newParts.push({ type: 'text', content: content.substring(lastIndex) });
+          }
+        } else {
+          newParts.push(part);
+        }
+      });
+      parts = newParts;
+
+      return parts.map((part, index) => {
+        if (part.type === 'bold') {
+          return <strong key={index} style={{ fontWeight: 700, color: 'var(--accent-primary)' }}>{part.content}</strong>;
+        }
+        if (part.type === 'code') {
+          return <code key={index} style={{
+            background: 'rgba(255, 255, 255, 0.1)',
+            padding: '2px 4px',
+            borderRadius: '4px',
+            fontFamily: 'monospace',
+            fontSize: '0.85em',
+            color: '#e0f2fe'
+          }}>{part.content}</code>;
+        }
+        return part.content;
+      });
+    };
+
+    // Headings (#, ##, ###, ####)
+    if (line.startsWith('# ') || line.startsWith('## ') || line.startsWith('### ') || line.startsWith('#### ')) {
+      const level = line.indexOf(' ');
+      const textVal = line.substring(level + 1);
+      const headingStyle = {
+        marginTop: '0.8rem',
+        marginBottom: '0.4rem',
+        fontWeight: 700,
+        color: 'var(--accent-primary)',
+        textShadow: '0 0 10px rgba(99, 102, 241, 0.2)',
+        borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+        paddingBottom: '0.2rem',
+        fontSize: level === 1 ? '1.25rem' : level === 2 ? '1.15rem' : '1.05rem',
+        lineHeight: '1.3'
+      };
+      
+      if (level === 1) {
+        elements.push(<h1 key={i} style={headingStyle}>{processInline(textVal)}</h1>);
+      } else if (level === 2) {
+        elements.push(<h2 key={i} style={headingStyle}>{processInline(textVal)}</h2>);
+      } else if (level === 3) {
+        elements.push(<h3 key={i} style={headingStyle}>{processInline(textVal)}</h3>);
+      } else {
+        elements.push(<h4 key={i} style={headingStyle}>{processInline(textVal)}</h4>);
+      }
+      continue;
+    }
+
+    // Bullet list items (* or -)
+    const listMatch = line.match(/^(\s*)([*+-])\s+(.*)$/);
+    if (listMatch) {
+      const indent = listMatch[1].length;
+      const content = listMatch[3];
+      elements.push(
+        <li key={i} style={{
+          marginLeft: `${indent + 1}rem`,
+          listStyleType: 'disc',
+          margin: '0.3rem 0',
+          lineHeight: '1.45'
+        }}>
+          {processInline(content)}
+        </li>
+      );
+      continue;
+    }
+
+    // Numbered lists (e.g. 1. item)
+    const numListMatch = line.match(/^(\s*)(\d+)\.\s+(.*)$/);
+    if (numListMatch) {
+      const indent = numListMatch[1].length;
+      const num = numListMatch[2];
+      const content = numListMatch[3];
+      elements.push(
+        <div key={i} style={{
+          marginLeft: `${indent + 0.5}rem`,
+          display: 'flex',
+          gap: '0.3rem',
+          margin: '0.3rem 0',
+          lineHeight: '1.45'
+        }}>
+          <span style={{ fontWeight: 600, color: 'var(--accent-primary)' }}>{num}.</span>
+          <span style={{ flex: 1 }}>{processInline(content)}</span>
+        </div>
+      );
+      continue;
+    }
+
+    // Standard paragraph
+    if (line.trim().length > 0) {
+      elements.push(<p key={i} style={{ margin: '0.4rem 0', lineHeight: '1.45' }}>{processInline(line)}</p>);
+    } else {
+      elements.push(<div key={i} style={{ height: '0.4rem' }} />);
+    }
+  }
+
+  // Render Interactive Agent Action Card if present
+  if (agentActionData) {
+    const actionKey = agentActionData.title || agentActionData.type;
+    const isApplied = appliedActionIds && appliedActionIds.includes(actionKey);
+    const nodeCount = agentActionData.nodes?.length || 0;
+    const arrowCount = agentActionData.connectors?.length || 0;
+    const stickyCount = agentActionData.stickies?.length || 0;
+    const colCount = agentActionData.columns?.length || agentActionData.quadrants?.length || 0;
+
+    let summaryText = '';
+    if (agentActionData.type === 'flowchart') {
+      summaryText = `Diagram Plan: ${nodeCount} process nodes, ${arrowCount} connecting arrows, ${stickyCount} sticky notes.`;
+    } else if (agentActionData.type === 'template') {
+      summaryText = `Template Structure: ${colCount} workspace zones & ${stickyCount} pre-configured tasks.`;
+    } else if (agentActionData.type === 'stickies') {
+      summaryText = `Ideation Cluster: ${stickyCount} categorized sticky notes ready to deploy.`;
+    } else if (agentActionData.type === 'organize') {
+      summaryText = `Smart Grid Alignment: Scans and organizes all sticky notes into neat columns.`;
+    } else {
+      summaryText = `Whiteboard Action Ready: ${agentActionData.title || 'Interactive Workspace Elements'}`;
+    }
+
+    elements.push(
+      <div key="agent-action-card" className="agent-action-card">
+        <div className="agent-card-header">
+          <Sparkles size={16} className="text-gradient" />
+          <span>Agentic Action: <strong>{agentActionData.title || 'Whiteboard Generator'}</strong></span>
+        </div>
+        <div className="agent-card-details">
+          {summaryText}
+        </div>
+        <button 
+          className="btn-apply-whiteboard" 
+          disabled={isApplied}
+          onClick={() => onApplyAction && onApplyAction(agentActionData)}
+        >
+          {isApplied ? (
+            <>✓ Applied to Whiteboard</>
+          ) : (
+            <><Sparkles size={14} /> ✨ Apply to Whiteboard</>
+          )}
+        </button>
+      </div>
+    );
+  }
+
+  return elements;
+};
+
+const Room = () => {
+  const { roomId: rawRoomId } = useParams();
+  const roomId = (rawRoomId || '').trim().toUpperCase();
+  const navigate = useNavigate();
+  const { theme, toggleTheme } = useContext(ThemeContext);
+  
+  const [activeLeftTab, setActiveLeftTab] = useState('chat');
+  const [activeTool, setActiveTool] = useState('pen'); // default to pen drawing
+  const [showBrushPanel, setShowBrushPanel] = useState(false);
+  const [isAiPanelOpen, setIsAiPanelOpen] = useState(true);
+  const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(true);
+  const [isToolbarOpen, setIsToolbarOpen] = useState(true);
+  const [toolbarPosition, setToolbarPosition] = useState(null); // start centered
+  const [isDraggingToolbar, setIsDraggingToolbar] = useState(false);
+  const [videoStripPosition, setVideoStripPosition] = useState(null); // start centered
+  const [isDraggingVideoStrip, setIsDraggingVideoStrip] = useState(false);
+  const [isVideoStripVisible, setIsVideoStripVisible] = useState(false);
+  const [laserPaths, setLaserPaths] = useState([]);
+  
+  // Unread badge states for floating overlays
+  const [unreadChats, setUnreadChats] = useState(0);
+  const [unreadAi, setUnreadAi] = useState(false);
+  
+  // Inline text tool states
+  const [isTypingText, setIsTypingText] = useState(false);
+  const [textInputPosition, setTextInputPosition] = useState({ x: 0, y: 0 });
+  const [textInputValue, setTextInputValue] = useState('');
+  
+  const [ws, setWs] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [inputMsg, setInputMsg] = useState('');
+  const [cursors, setCursors] = useState({});
+  const [clientId, setClientId] = useState('');
+  const [roomUsers, setRoomUsers] = useState(1);
+  const [peers, setPeers] = useState([]);
+  const [joinError, setJoinError] = useState('');
+  
+  const [mediaState, setMediaState] = useState({
+    mic: false,
+    camera: false,
+    screen: false
+  });
+
+  const [handRaised, setHandRaised] = useState(false);
+  const [raisedHands, setRaisedHands] = useState({});
+  const [gridType, setGridType] = useState('dotted'); // 'dotted', 'lines', 'none'
+  const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
+
+  // Media Refs & States
+  const localStreamRef = useRef(null);
+  const localVideoRef = useRef(null);
+  const [hasCameraPermission, setHasCameraPermission] = useState(false);
+
+  // WebRTC Peer Connections
+  const peerConnectionsRef = useRef(new Map()); // peerId -> RTCPeerConnection
+  const [remoteStreams, setRemoteStreams] = useState({}); // peerId -> MediaStream
+  const pendingCandidatesRef = useRef(new Map()); // peerId -> ICE candidates queued before remote description set
+  const clientIdRef = useRef('');
+  const wsRef = useRef(null);
+
+  // Screen Share Window Refs & States
+  const [screenStream, setScreenStream] = useState(null);
+  const screenStreamRef = useRef(null);
+  useEffect(() => {
+    screenStreamRef.current = screenStream;
+  }, [screenStream]);
+  const [screenPosition, setScreenPosition] = useState({ x: 120, y: 120 });
+  const [screenSize, setScreenSize] = useState({ width: 420, height: 260 });
+  const [isDraggingScreen, setIsDraggingScreen] = useState(false);
+  const screenDragStart = useRef({ x: 0, y: 0 });
+  
+  const [isResizingScreen, setIsResizingScreen] = useState(false);
+  const screenResizeStart = useRef({ x: 0, y: 0, width: 0, height: 0 });
+
+  const localVideoRefCallback = (el) => {
+    if (el && localStreamRef.current) {
+      el.srcObject = localStreamRef.current;
+    }
+  };
+
+  const screenVideoRefCallback = (el) => {
+    if (el && screenStream) {
+      el.srcObject = screenStream;
+    }
+  };
+
+  // Canvas Whiteboard States
+  const [brushColor, setBrushColor] = useState('#818cf8'); // default indigo
+  const [brushSize, setBrushSize] = useState(4);
+  const [shapeType, setShapeType] = useState('rect'); // rect or circle
+  const [drawActions, setDrawActions] = useState([]);
+  const [isDrawing, setIsDrawing] = useState(false);
+
+  // Agentic AI & Notification States
+  const [appliedActionIds, setAppliedActionIds] = useState([]);
+  const [toastMessage, setToastMessage] = useState('');
+  const [isListening, setIsListening] = useState(false);
+  const speechRecognitionRef = useRef(null);
+
+  const triggerToast = (msg) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage(prev => prev === msg ? '' : prev);
+    }, 3500);
+  };
+
+  const selectTool = (tool, shape = null) => {
+    if (tool === 'pen' || tool === 'eraser' || tool === 'shape' || tool === 'text' || tool === 'arrow' || tool === 'line') {
+      if (activeTool === tool && (tool !== 'shape' || shapeType === shape)) {
+        // Toggle panel open/close if clicking the same active tool & shape configuration
+        setShowBrushPanel(prev => !prev);
+      } else {
+        // Open panel and set active tool
+        setActiveTool(tool);
+        setShowBrushPanel(true);
+        if (shape) {
+          setShapeType(shape);
+        }
+      }
+    } else {
+      setActiveTool(tool);
+      setShowBrushPanel(false);
+    }
+  };
+
+  const getToolbarStyle = () => {
+    if (!toolbarPosition) {
+      return {
+        top: '20px',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        position: 'absolute'
+      };
+    }
+    return {
+      top: `${toolbarPosition.y}px`,
+      left: `${toolbarPosition.x}px`,
+      transform: 'none',
+      position: 'absolute'
+    };
+  };
+
+  const getBrushPanelStyle = () => {
+    if (!toolbarPosition) {
+      return {
+        top: '75px',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        position: 'absolute'
+      };
+    }
+    return {
+      top: `${toolbarPosition.y + 55}px`,
+      left: `${toolbarPosition.x}px`,
+      transform: 'none',
+      position: 'absolute'
+    };
+  };
+
+  const handleToolbarDragStart = (e) => {
+    e.preventDefault();
+    const toolbarEl = e.currentTarget.closest('.whiteboard-toolbar');
+    if (!toolbarEl) return;
+    const rect = toolbarEl.getBoundingClientRect();
+    const parentRect = boardRef.current.getBoundingClientRect();
+    
+    // Convert to absolute coordinates immediately to avoid layout shift conflicts
+    const initialX = rect.left - parentRect.left;
+    const initialY = rect.top - parentRect.top;
+    setToolbarPosition({ x: initialX, y: initialY });
+    
+    toolbarDragStart.current = {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    };
+    setIsDraggingToolbar(true);
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const handleToolbarDragMove = (e) => {
+    if (!isDraggingToolbar || !boardRef.current) return;
+    const parentRect = boardRef.current.getBoundingClientRect();
+    const toolbarEl = e.currentTarget.closest('.whiteboard-toolbar');
+    if (!toolbarEl) return;
+    const rect = toolbarEl.getBoundingClientRect();
+    
+    let newX = e.clientX - parentRect.left - toolbarDragStart.current.x;
+    let newY = e.clientY - parentRect.top - toolbarDragStart.current.y;
+    
+    // Keep within bounds
+    newX = Math.max(10, Math.min(newX, parentRect.width - rect.width - 10));
+    newY = Math.max(10, Math.min(newY, parentRect.height - rect.height - 10));
+    
+    setToolbarPosition({ x: newX, y: newY });
+  };
+
+  const handleToolbarDragEnd = (e) => {
+    if (isDraggingToolbar) {
+      setIsDraggingToolbar(false);
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
+  };
+
+  const getVideoStripStyle = () => {
+    if (!videoStripPosition) {
+      return {
+        bottom: '1rem',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        position: 'absolute'
+      };
+    }
+    return {
+      top: `${videoStripPosition.y}px`,
+      left: `${videoStripPosition.x}px`,
+      position: 'absolute'
+    };
+  };
+
+  const handleVideoDragStart = (e) => {
+    if (e.target.closest('button') || e.target.closest('textarea')) return;
+    e.preventDefault();
+    const videoStripEl = e.currentTarget.closest('.video-strip');
+    if (!videoStripEl) return;
+    const rect = videoStripEl.getBoundingClientRect();
+    const parentRect = boardRef.current.getBoundingClientRect();
+    
+    // Convert to absolute coordinates immediately to avoid layout shift conflicts
+    const initialX = rect.left - parentRect.left;
+    const initialY = rect.top - parentRect.top;
+    setVideoStripPosition({ x: initialX, y: initialY });
+    
+    videoStripDragStart.current = {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    };
+    setIsDraggingVideoStrip(true);
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const handleVideoDragMove = (e) => {
+    if (!isDraggingVideoStrip || !boardRef.current) return;
+    const parentRect = boardRef.current.getBoundingClientRect();
+    const videoStripEl = e.currentTarget.closest('.video-strip');
+    if (!videoStripEl) return;
+    const rect = videoStripEl.getBoundingClientRect();
+    
+    let newX = e.clientX - parentRect.left - videoStripDragStart.current.x;
+    let newY = e.clientY - parentRect.top - videoStripDragStart.current.y;
+    
+    // Keep within bounds
+    newX = Math.max(10, Math.min(newX, parentRect.width - rect.width - 10));
+    newY = Math.max(10, Math.min(newY, parentRect.height - rect.height - 10));
+    
+    setVideoStripPosition({ x: newX, y: newY });
+  };
+
+  const handleVideoDragEnd = (e) => {
+    if (isDraggingVideoStrip) {
+      setIsDraggingVideoStrip(false);
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
+  };
+
+  // Sticky Notes States
+  const [stickyNotes, setStickyNotes] = useState([]);
+  const [draggingNoteId, setDraggingNoteId] = useState(null);
+
+  // AI Chat States
+  const [aiMessages, setAiMessages] = useState([
+    { role: 'assistant', text: 'Hey there! I am the LiveCollab AI assistant. Draw on the board, drop sticky notes, or type messages, and ask me to summarize the board or generate action checklists!' }
+  ]);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [aiInput, setAiInput] = useState('');
+  const [geminiApiKey, setGeminiApiKey] = useState(() => {
+    return localStorage.getItem('livecollab_gemini_key') || import.meta.env.VITE_GEMINI_API_KEY || '';
+  });
+  const [tempApiKey, setTempApiKey] = useState('');
+  const [showApiKeySetting, setShowApiKeySetting] = useState(false);
+  const [hasBackendKey, setHasBackendKey] = useState(false);
+  const [redoStack, setRedoStack] = useState([]);
+
+  // AI Panel Width, Opacity, and Blur Customizations
+  const [aiPanelWidth, setAiPanelWidth] = useState(() => {
+    const saved = localStorage.getItem('livecollab_ai_width');
+    return saved !== null ? parseInt(saved, 10) : 320;
+  });
+  const [aiPanelOpacity, setAiPanelOpacity] = useState(() => {
+    const saved = localStorage.getItem('livecollab_ai_opacity');
+    return saved !== null ? parseFloat(saved) : 0.75;
+  });
+  const [aiPanelBlur, setAiPanelBlur] = useState(() => {
+    const saved = localStorage.getItem('livecollab_ai_blur');
+    return saved !== null ? parseInt(saved, 10) : 16;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('livecollab_ai_width', aiPanelWidth.toString());
+  }, [aiPanelWidth]);
+
+  useEffect(() => {
+    localStorage.setItem('livecollab_ai_opacity', aiPanelOpacity.toString());
+  }, [aiPanelOpacity]);
+
+  useEffect(() => {
+    localStorage.setItem('livecollab_ai_blur', aiPanelBlur.toString());
+  }, [aiPanelBlur]);
+
+  const handleAiResizeStart = (e) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = aiPanelWidth;
+    
+    const handlePointerMove = (moveEvent) => {
+      const deltaX = startX - moveEvent.clientX; // dragging left increases width
+      const newWidth = Math.max(260, Math.min(800, startWidth + deltaX));
+      setAiPanelWidth(newWidth);
+    };
+    
+    const handlePointerUp = () => {
+      document.removeEventListener('pointermove', handlePointerMove);
+      document.removeEventListener('pointerup', handlePointerUp);
+    };
+    
+    document.addEventListener('pointermove', handlePointerMove);
+    document.addEventListener('pointerup', handlePointerUp);
+  };
+
+  const boardRef = useRef(null);
+  const canvasRef = useRef(null);
+  const overlayCanvasRef = useRef(null);
+  const chatBottomRef = useRef(null);
+  const aiBottomRef = useRef(null);
+  const chatMessagesRef = useRef(null);
+  const aiChatHistoryRef = useRef(null);
+  const startPointRef = useRef({ x: 0, y: 0 });
+  const currentPathRef = useRef([]);
+  const dragOffsetRef = useRef({ x: 0, y: 0 });
+  const drawActionsRef = useRef([]);
+  
+  const toolbarDragStart = useRef({ x: 0, y: 0 });
+  const videoStripDragStart = useRef({ x: 0, y: 0 });
+
+  // Sync refs to avoid stale closures in WebSockets onmessage handler
+  const isLeftSidebarOpenRef = useRef(isLeftSidebarOpen);
+  const activeLeftTabRef = useRef(activeLeftTab);
+  const isAiPanelOpenRef = useRef(isAiPanelOpen);
+
+  useEffect(() => {
+    isLeftSidebarOpenRef.current = isLeftSidebarOpen;
+  }, [isLeftSidebarOpen]);
+
+  useEffect(() => {
+    activeLeftTabRef.current = activeLeftTab;
+  }, [activeLeftTab]);
+
+  useEffect(() => {
+    isAiPanelOpenRef.current = isAiPanelOpen;
+  }, [isAiPanelOpen]);
+
+  // Reset unread counts when opening Chat tab
+  useEffect(() => {
+    if (isLeftSidebarOpen && activeLeftTab === 'chat') {
+      setUnreadChats(0);
+    }
+  }, [isLeftSidebarOpen, activeLeftTab]);
+
+  // Reset unread AI notifications when opening AI panel
+  useEffect(() => {
+    if (isAiPanelOpen) {
+      setUnreadAi(false);
+    }
+  }, [isAiPanelOpen]);
+
+  useEffect(() => {
+    drawActionsRef.current = drawActions;
+  }, [drawActions]);
+
+  // Check if backend has Gemini API key configured
+  useEffect(() => {
+    fetch(`${apiBaseUrl}/api/ai/status`)
+      .then(res => res.json())
+      .then(data => {
+        if (data && typeof data.hasKey === 'boolean') {
+          setHasBackendKey(data.hasKey);
+        }
+      })
+      .catch(err => console.warn('Failed to fetch backend AI key status', err));
+  }, []);
+
+  // WebSockets Setup
+  useEffect(() => {
+    if (!roomId) {
+      alert('Please enter a room code to join.');
+      navigate('/dashboard');
+      return;
+    }
+
+    const socket = new WebSocket(`${wsBaseUrl}/connect`);
+    
+    socket.onopen = () => {
+      socket.send(JSON.stringify({ type: 'join', roomId }));
+    };
+
+    socket.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type === 'joined') {
+        setJoinError('');
+        setClientId(data.clientId);
+        clientIdRef.current = data.clientId;
+        if (data.history && data.history.length > 0) {
+          setMessages(data.history);
+        }
+        if (data.drawActions) {
+          setDrawActions(data.drawActions);
+          // Wait for canvas to mount and size to redraw
+          setTimeout(() => redrawCanvas(data.drawActions), 100);
+        }
+        if (data.stickyNotes) {
+          setStickyNotes(data.stickyNotes);
+        }
+        // Connect to existing peers via WebRTC
+        if (data.existingPeers && data.existingPeers.length > 0) {
+          setPeers(data.existingPeers);
+          setRoomUsers(data.existingPeers.length + 1);
+          data.existingPeers.forEach(peerId => {
+            connectToPeer(peerId);
+          });
+        }
+      } else if (data.type === 'error') {
+        setJoinError(data.message || 'Unable to join room');
+        alert(data.message || 'Unable to join room');
+        navigate('/dashboard');
+      } else if (data.type === 'chat') {
+        setMessages(prev => [...prev, data]);
+        if (!isLeftSidebarOpenRef.current || activeLeftTabRef.current !== 'chat') {
+          setUnreadChats(prev => prev + 1);
+        }
+      } else if (data.type === 'cursor') {
+        setCursors(prev => ({
+          ...prev,
+          [data.senderId]: { x: data.x, y: data.y }
+        }));
+      } else if (data.type === 'user_joined') {
+        setPeers(prev => [...prev.filter(id => id !== data.clientId), data.clientId]);
+        setRoomUsers(prev => prev + 1);
+        setMessages(prev => [...prev, { type: 'system', text: data.message }]);
+        // The newly joined user will send us an offer, so we wait for it
+      } else if (data.type === 'user_left') {
+        setPeers(prev => prev.filter(id => id !== data.clientId));
+        setRoomUsers(prev => Math.max(1, prev - 1));
+        setMessages(prev => [...prev, { type: 'system', text: `User ${data.clientId.slice(0,4)} left the room` }]);
+        
+        // Remove left user's cursor
+        setCursors(prev => {
+          const next = { ...prev };
+          delete next[data.clientId];
+          return next;
+        });
+        // Cleanup WebRTC peer connection for left user
+        cleanupPeer(data.clientId);
+      } else if (data.type === 'webrtc-offer') {
+        handleWebRTCOffer(data.senderId, data.offer);
+      } else if (data.type === 'webrtc-answer') {
+        handleWebRTCAnswer(data.senderId, data.answer);
+      } else if (data.type === 'webrtc-ice-candidate') {
+        handleICECandidate(data.senderId, data.candidate);
+      } else if (data.type === 'laser') {
+        setLaserPaths(prev => [
+          ...prev.filter(trail => trail.id !== data.senderId),
+          { id: data.senderId, points: data.points, timestamp: Date.now() }
+        ]);
+      } else if (data.type === 'draw') {
+        if (data.action) {
+          if (data.isPreview) {
+            // Live draw preview segment on canvas
+            const canvas = canvasRef.current;
+            if (canvas) {
+              const ctx = canvas.getContext('2d');
+              drawActionOnCtx(ctx, data.action);
+            }
+          } else {
+            // Append final action and redraw completely
+            setDrawActions(prev => {
+              const next = [...prev, data.action];
+              redrawCanvas(next);
+              return next;
+            });
+            setRedoStack([]);
+          }
+        }
+      } else if (data.type === 'draw_sync') {
+        if (data.drawActions) {
+          setDrawActions(data.drawActions);
+          redrawCanvas(data.drawActions);
+          setRedoStack([]);
+        }
+      } else if (data.type === 'clear_board') {
+        setDrawActions([]);
+        setStickyNotes([]);
+        redrawCanvas([]);
+        setRedoStack([]);
+      } else if (data.type === 'sticky_create') {
+        if (data.note) {
+          setStickyNotes(prev => [...prev.filter(n => n.id !== data.note.id), data.note]);
+        }
+      } else if (data.type === 'sticky_update') {
+        setStickyNotes(prev => prev.map(n => {
+          if (n.id === data.noteId) {
+            return { ...n, ...data.updates };
+          }
+          return n;
+        }));
+      } else if (data.type === 'sticky_delete') {
+        setStickyNotes(prev => prev.filter(n => n.id !== data.noteId));
+      } else if (data.type === 'sticky_batch_sync') {
+        if (data.stickyNotes) {
+          setStickyNotes(data.stickyNotes);
+        }
+      } else if (data.type === 'raise_hand') {
+        setRaisedHands(prev => ({ ...prev, [data.senderId]: data.raised }));
+        if (data.raised) {
+          setMessages(prev => [...prev, { type: 'system', text: `User ${data.senderId.slice(0, 4)} raised their hand ✋` }]);
+        }
+      }
+    };
+
+    socket.onerror = () => {
+      setJoinError('Connection error. Please try again.');
+    };
+
+    setWs(socket);
+    wsRef.current = socket;
+
+    return () => {
+      cleanupAllPeers();
+      socket.close();
+    };
+  }, [roomId, navigate]);
+
+  // Handle Resize and Initial Canvas Setup (Optimized to prevent flickering)
+  useEffect(() => {
+    const handleResize = () => {
+      const canvas = canvasRef.current;
+      const overlayCanvas = overlayCanvasRef.current;
+      if (canvas && boardRef.current) {
+        const rect = boardRef.current.getBoundingClientRect();
+        const targetWidth = Math.floor(rect.width);
+        const targetHeight = Math.floor(rect.height);
+        
+        // Only set width and height if the size has actually changed.
+        // This avoids clearing the canvas context and flickering on draw updates.
+        if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+          canvas.width = targetWidth;
+          canvas.height = targetHeight;
+          redrawCanvas(drawActionsRef.current);
+        }
+        if (overlayCanvas && (overlayCanvas.width !== targetWidth || overlayCanvas.height !== targetHeight)) {
+          overlayCanvas.width = targetWidth;
+          overlayCanvas.height = targetHeight;
+          redrawOverlayCanvas();
+        }
+      }
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    // Extra timeout setup to capture delayed flex mounts
+    const t = setTimeout(handleResize, 300);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      clearTimeout(t);
+    };
+  }, [isLeftSidebarOpen, isAiPanelOpen]);
+
+  // Cleanup WebRTC camera/mic and screen sharing streams on unmount to prevent leaks
+  useEffect(() => {
+    return () => {
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach(t => t.stop());
+      }
+      if (screenStreamRef.current) {
+        screenStreamRef.current.getTracks().forEach(t => t.stop());
+      }
+    };
+  }, []);
+
+  // Handle laser trails fading out
+  useEffect(() => {
+    if (laserPaths.length === 0) return;
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const activeTrails = laserPaths.filter(trail => now - trail.timestamp < 1500);
+      if (activeTrails.length !== laserPaths.length) {
+        setLaserPaths(activeTrails);
+        redrawOverlayCanvas();
+      } else if (activeTrails.length > 0) {
+        redrawOverlayCanvas();
+      }
+    }, 50);
+    return () => clearInterval(interval);
+  }, [laserPaths]);
+
+  // Auto-scroll chats without parent page jump
+  useEffect(() => {
+    const container = chatMessagesRef.current;
+    if (container) {
+      container.scrollTop = container.scrollHeight;
+    }
+  }, [messages]);
+
+  // Auto-scroll AI logs without parent page jump
+  useEffect(() => {
+    const container = aiChatHistoryRef.current;
+    if (container) {
+      container.scrollTop = container.scrollHeight;
+    }
+  }, [aiMessages]);
+
+  // Drawing functions
+  const drawActionOnCtx = (ctx, action) => {
+    if (!action) return;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = action.color;
+    ctx.lineWidth = action.size;
+
+    if (action.tool === 'text') {
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.font = `bold ${action.size * 3 + 12}px Inter, sans-serif`;
+      ctx.fillStyle = action.color;
+      ctx.fillText(action.text, action.x, action.y);
+    } else if (action.tool === 'pen' || action.tool === 'eraser') {
+      if (action.tool === 'eraser') {
+        // Destination-out clears canvas pixels
+        ctx.globalCompositeOperation = 'destination-out';
+      } else {
+        ctx.globalCompositeOperation = 'source-over';
+      }
+
+      ctx.beginPath();
+      const points = action.points || [];
+      if (points.length > 0) {
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) {
+          ctx.lineTo(points[i].x, points[i].y);
+        }
+        ctx.stroke();
+      }
+      ctx.globalCompositeOperation = 'source-over';
+    } else if (action.tool === 'line') {
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.beginPath();
+      ctx.moveTo(action.x, action.y);
+      ctx.lineTo(action.x + action.width, action.y + action.height);
+      ctx.stroke();
+    } else if (action.tool === 'arrow') {
+      ctx.globalCompositeOperation = 'source-over';
+      const fromX = action.x;
+      const fromY = action.y;
+      const toX = action.x + action.width;
+      const toY = action.y + action.height;
+      const headlen = Math.max(12, action.size * 3.5);
+      const angle = Math.atan2(toY - fromY, toX - fromX);
+
+      // Arrow line
+      ctx.beginPath();
+      ctx.moveTo(fromX, fromY);
+      ctx.lineTo(toX, toY);
+      ctx.stroke();
+
+      // Arrowhead triangle
+      ctx.beginPath();
+      ctx.moveTo(toX, toY);
+      ctx.lineTo(toX - headlen * Math.cos(angle - Math.PI / 6), toY - headlen * Math.sin(angle - Math.PI / 6));
+      ctx.lineTo(toX - headlen * Math.cos(angle + Math.PI / 6), toY - headlen * Math.sin(angle + Math.PI / 6));
+      ctx.closePath();
+      ctx.fillStyle = action.color;
+      ctx.fill();
+      ctx.stroke();
+    } else if (action.tool === 'shape') {
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.beginPath();
+      if (action.shapeType === 'rect') {
+        ctx.rect(action.x, action.y, action.width, action.height);
+      } else if (action.shapeType === 'circle') {
+        ctx.arc(
+          action.x + action.width / 2,
+          action.y + action.height / 2,
+          Math.abs(action.width) / 2,
+          0,
+          2 * Math.PI
+        );
+      } else if (action.shapeType === 'diamond') {
+        const cx = action.x + action.width / 2;
+        const cy = action.y + action.height / 2;
+        ctx.moveTo(cx, action.y);
+        ctx.lineTo(action.x + action.width, cy);
+        ctx.lineTo(cx, action.y + action.height);
+        ctx.lineTo(action.x, cy);
+        ctx.closePath();
+      }
+      ctx.stroke();
+    }
+  };
+
+  const redrawCanvas = (actionsList) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    actionsList.forEach(action => {
+      drawActionOnCtx(ctx, action);
+    });
+  };
+
+  const redrawOverlayCanvas = (currentDrawingAction = null, hoverCoords = null) => {
+    const canvas = overlayCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (currentDrawingAction) {
+      drawActionOnCtx(ctx, currentDrawingAction);
+    }
+
+    // Draw active laser pointer trails
+    laserPaths.forEach(trail => {
+      const age = Date.now() - trail.timestamp;
+      if (age > 1500) return;
+      const alpha = 1 - age / 1500;
+      ctx.strokeStyle = `rgba(239, 68, 68, ${alpha})`;
+      ctx.lineWidth = 6;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      const points = trail.points || [];
+      if (points.length > 0) {
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) {
+          ctx.lineTo(points[i].x, points[i].y);
+        }
+        ctx.stroke();
+      }
+    });
+
+    // Draw brush size preview indicator circle on hover
+    if (hoverCoords && (activeTool === 'pen' || activeTool === 'eraser' || activeTool === 'laser' || activeTool === 'arrow' || activeTool === 'line')) {
+      ctx.beginPath();
+      const radius = activeTool === 'laser' ? 6 : brushSize / 2;
+      ctx.arc(hoverCoords.x, hoverCoords.y, radius, 0, 2 * Math.PI);
+      ctx.strokeStyle = activeTool === 'eraser' ? 'rgba(239, 68, 68, 0.7)' : activeTool === 'laser' ? 'rgba(239, 68, 68, 0.6)' : 'rgba(99, 102, 241, 0.7)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      
+      // Draw a tiny center dot
+      ctx.beginPath();
+      ctx.arc(hoverCoords.x, hoverCoords.y, 1, 0, 2 * Math.PI);
+      ctx.fillStyle = activeTool === 'eraser' || activeTool === 'laser' ? 'rgba(239, 68, 68, 0.9)' : 'rgba(99, 102, 241, 0.9)';
+      ctx.fill();
+    }
+  };
+
+  // Canvas Handlers
+  const handleMouseDownCanvas = (e) => {
+    if (activeTool === 'cursor') return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    setIsDrawing(true);
+    startPointRef.current = { x, y };
+
+    if (activeTool === 'pen' || activeTool === 'eraser') {
+      currentPathRef.current = [{ x, y }];
+    } else if (activeTool === 'text') {
+      setTextInputPosition({ x, y });
+      setIsTypingText(true);
+      setTextInputValue('');
+      setIsDrawing(false);
+    } else if (activeTool === 'laser') {
+      currentPathRef.current = [{ x, y }];
+      setLaserPaths(prev => [
+        ...prev.filter(trail => trail.id !== 'local'),
+        { id: 'local', points: [{ x, y }], timestamp: Date.now() }
+      ]);
+    }
+  };
+
+  const handleMouseMoveCanvas = (e) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    // Sync remote cursor coordinates
+    if (ws && ws.readyState === WebSocket.OPEN && boardRef.current) {
+      ws.send(JSON.stringify({ type: 'cursor', x, y, roomId }));
+    }
+
+    // Determine current drawing action or shape preview
+    let currentPreviewAction = null;
+    if (isDrawing && (activeTool === 'shape' || activeTool === 'arrow' || activeTool === 'line')) {
+      const width = x - startPointRef.current.x;
+      const height = y - startPointRef.current.y;
+      currentPreviewAction = {
+        tool: activeTool,
+        shapeType: activeTool === 'shape' ? shapeType : undefined,
+        x: startPointRef.current.x,
+        y: startPointRef.current.y,
+        width,
+        height,
+        color: brushColor,
+        size: brushSize
+      };
+    }
+
+    // Redraw overlay canvas with the hover cursor outline
+    redrawOverlayCanvas(currentPreviewAction, { x, y });
+
+    if (!isDrawing || activeTool === 'cursor') return;
+
+    if (activeTool === 'laser') {
+      const newPoint = { x, y };
+      currentPathRef.current.push(newPoint);
+      setLaserPaths(prev => [
+        ...prev.filter(trail => trail.id !== 'local'),
+        { id: 'local', points: [...currentPathRef.current], timestamp: Date.now() }
+      ]);
+      redrawOverlayCanvas(null, { x, y });
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: 'laser',
+          points: currentPathRef.current,
+          roomId
+        }));
+      }
+    } else if (activeTool === 'pen' || activeTool === 'eraser') {
+      const prevPoint = currentPathRef.current[currentPathRef.current.length - 1];
+      const newPoint = { x, y };
+      currentPathRef.current.push(newPoint);
+
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        const action = {
+          tool: activeTool,
+          points: [prevPoint, newPoint],
+          color: activeTool === 'eraser' ? '#000' : brushColor,
+          size: brushSize
+        };
+        drawActionOnCtx(ctx, action);
+
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+            type: 'draw',
+            action,
+            isPreview: true,
+            roomId
+          }));
+        }
+      }
+    }
+  };
+
+  const handleMouseUpCanvas = (e) => {
+    if (!isDrawing || activeTool === 'cursor') return;
+    setIsDrawing(false);
+
+    if (activeTool === 'laser') {
+      return;
+    }
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    let finalAction = null;
+
+    if (activeTool === 'pen' || activeTool === 'eraser') {
+      finalAction = {
+        tool: activeTool,
+        points: currentPathRef.current,
+        color: activeTool === 'eraser' ? '#000' : brushColor,
+        size: brushSize
+      };
+    } else if (activeTool === 'shape' || activeTool === 'arrow' || activeTool === 'line') {
+      const width = x - startPointRef.current.x;
+      const height = y - startPointRef.current.y;
+      if (Math.abs(width) > 3 || Math.abs(height) > 3) {
+        finalAction = {
+          tool: activeTool,
+          shapeType: activeTool === 'shape' ? shapeType : undefined,
+          x: startPointRef.current.x,
+          y: startPointRef.current.y,
+          width,
+          height,
+          color: brushColor,
+          size: brushSize
+        };
+      }
+    }
+
+    if (finalAction) {
+      setDrawActions(prev => {
+        const next = [...prev, finalAction];
+        redrawCanvas(next);
+        return next;
+      });
+      setRedoStack([]);
+      redrawOverlayCanvas(null, { x, y }); // Clear shape preview from top canvas, keeping the hover dot
+
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: 'draw',
+          action: finalAction,
+          isPreview: false,
+          roomId
+        }));
+      }
+    }
+  };
+
+  const handleMouseLeaveCanvas = () => {
+    setIsDrawing(false);
+    redrawOverlayCanvas(null, null); // Clear brush outline cursor
+  };
+
+  const handleUndo = () => {
+    if (drawActions.length === 0) return;
+    const nextActions = [...drawActions];
+    const undoneAction = nextActions.pop();
+    
+    setDrawActions(nextActions);
+    setRedoStack(prev => [...prev, undoneAction]);
+    redrawCanvas(nextActions);
+    
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'draw_sync', drawActions: nextActions, roomId }));
+    }
+  };
+
+  const handleRedo = () => {
+    if (redoStack.length === 0) return;
+    const nextRedo = [...redoStack];
+    const redoneAction = nextRedo.pop();
+    const nextActions = [...drawActions, redoneAction];
+    
+    setDrawActions(nextActions);
+    setRedoStack(nextRedo);
+    redrawCanvas(nextActions);
+    
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'draw_sync', drawActions: nextActions, roomId }));
+    }
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Don't trigger shortcuts if user is typing in inputs or textareas
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+      
+      const isCmdOrCtrl = e.metaKey || e.ctrlKey;
+      if (isCmdOrCtrl && e.key.toLowerCase() === 'z') {
+        if (e.shiftKey) {
+          e.preventDefault();
+          handleRedo();
+        } else {
+          e.preventDefault();
+          handleUndo();
+        }
+      } else if (isCmdOrCtrl && e.key.toLowerCase() === 'y') {
+        e.preventDefault();
+        handleRedo();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [drawActions, redoStack, ws, roomId]);
+
+  const clearWhiteboard = () => {
+    if (window.confirm('Are you sure you want to clear the collaborative whiteboard?')) {
+      setDrawActions([]);
+      setStickyNotes([]);
+      setRedoStack([]);
+      redrawCanvas([]);
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'clear_board', roomId }));
+      }
+    }
+  };
+
+  // Sticky Notes logic
+  const createStickyNote = (colorName = 'yellow') => {
+    const bgColors = {
+      yellow: '#fef08a',
+      pink: '#fbcfe8',
+      blue: '#93c5fd',
+      green: '#86efac'
+    };
+    
+    const newNote = {
+      id: Math.random().toString(36).substring(2, 10),
+      x: 200 + Math.random() * 200,
+      y: 150 + Math.random() * 150,
+      text: '',
+      color: bgColors[colorName] || '#fef08a',
+      colorName
+    };
+
+    setStickyNotes(prev => [...prev, newNote]);
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'sticky_create', note: newNote, roomId }));
+    }
+  };
+
+  const handleStickyPointerDown = (e, noteId) => {
+    if (activeTool !== 'cursor') return;
+    if (e.target.tagName.toLowerCase() === 'textarea' || e.target.closest('.delete-note-btn')) return;
+    
+    setDraggingNoteId(noteId);
+    const note = stickyNotes.find(n => n.id === noteId);
+    if (note) {
+      dragOffsetRef.current = {
+        x: e.clientX - note.x,
+        y: e.clientY - note.y
+      };
+    }
+    e.target.setPointerCapture(e.pointerId);
+  };
+
+  const handleStickyPointerMove = (e, noteId) => {
+    if (draggingNoteId !== noteId) return;
+    const newX = e.clientX - dragOffsetRef.current.x;
+    const newY = e.clientY - dragOffsetRef.current.y;
+    
+    setStickyNotes(prev => prev.map(note => {
+      if (note.id === noteId) {
+        const updated = { ...note, x: newX, y: newY };
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+            type: 'sticky_update',
+            noteId,
+            updates: { x: newX, y: newY },
+            roomId
+          }));
+        }
+        return updated;
+      }
+      return note;
+    }));
+  };
+
+  const handleStickyPointerUp = (e, noteId) => {
+    if (draggingNoteId === noteId) {
+      setDraggingNoteId(null);
+      e.target.releasePointerCapture(e.pointerId);
+    }
+  };
+
+  const handleStickyTextChange = (noteId, newText) => {
+    setStickyNotes(prev => prev.map(note => {
+      if (note.id === noteId) {
+        const updated = { ...note, text: newText };
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+            type: 'sticky_update',
+            noteId,
+            updates: { text: newText },
+            roomId
+          }));
+        }
+        return updated;
+      }
+      return note;
+    }));
+  };
+
+  const deleteStickyNote = (noteId) => {
+    setStickyNotes(prev => prev.filter(note => note.id !== noteId));
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'sticky_delete', noteId, roomId }));
+    }
+  };
+
+  // Agentic AI Co-Pilot Execution Engine
+  const executeAgentAction = (action) => {
+    if (!action) return;
+
+    const newDrawActions = [];
+    const newStickyNotes = [];
+    const now = Date.now();
+    const bgColors = {
+      yellow: '#fef08a',
+      pink: '#fbcfe8',
+      blue: '#93c5fd',
+      green: '#86efac'
+    };
+
+    if (action.type === 'flowchart' && action.nodes) {
+      // 1. Draw connecting arrows first
+      if (action.connectors) {
+        const nodeMap = {};
+        action.nodes.forEach(n => { nodeMap[n.id] = n; });
+
+        action.connectors.forEach(c => {
+          const fromNode = nodeMap[c.from];
+          const toNode = nodeMap[c.to];
+          if (fromNode && toNode) {
+            const fromCenter = { x: fromNode.x + fromNode.w, y: fromNode.y + fromNode.h / 2 };
+            const toCenter = { x: toNode.x, y: toNode.y + toNode.h / 2 };
+            
+            newDrawActions.push({
+              tool: 'arrow',
+              x: fromCenter.x,
+              y: fromCenter.y,
+              width: toCenter.x - fromCenter.x,
+              height: toCenter.y - fromCenter.y,
+              color: '#818cf8',
+              size: 3
+            });
+          }
+        });
+      }
+
+      // 2. Draw nodes (boxes + text labels)
+      action.nodes.forEach(node => {
+        newDrawActions.push({
+          tool: 'shape',
+          shapeType: 'rect',
+          x: node.x,
+          y: node.y,
+          width: node.w,
+          height: node.h,
+          color: node.color || '#6366f1',
+          size: 3
+        });
+
+        newDrawActions.push({
+          tool: 'text',
+          x: node.x + 14,
+          y: node.y + node.h / 2 + 5,
+          text: node.text,
+          color: '#ffffff',
+          size: 2
+        });
+      });
+
+      // 3. Optional stickies
+      if (action.stickies) {
+        action.stickies.forEach((s, idx) => {
+          newStickyNotes.push({
+            id: `ai_flow_${now}_${idx}`,
+            text: s.text,
+            color: bgColors[s.color] || s.color || '#fef08a',
+            colorName: s.color || 'yellow',
+            x: s.x,
+            y: s.y
+          });
+        });
+      }
+    } else if (action.type === 'template' && action.columns) {
+      // Kanban Board Template
+      action.columns.forEach((col, idx) => {
+        newDrawActions.push({
+          tool: 'text',
+          x: col.x + 10,
+          y: 110,
+          text: col.title,
+          color: col.color || '#818cf8',
+          size: 4
+        });
+        if (idx > 0) {
+          newDrawActions.push({
+            tool: 'line',
+            x: col.x - 20,
+            y: 80,
+            width: 0,
+            height: 520,
+            color: 'rgba(255, 255, 255, 0.15)',
+            size: 2
+          });
+        }
+      });
+
+      if (action.stickies) {
+        action.stickies.forEach((s, idx) => {
+          newStickyNotes.push({
+            id: `ai_k_${now}_${idx}`,
+            text: s.text,
+            color: bgColors[s.color] || s.color || '#fef08a',
+            colorName: s.color || 'yellow',
+            x: s.x,
+            y: s.y
+          });
+        });
+      }
+    } else if (action.type === 'template' && action.quadrants) {
+      // SWOT Matrix Template
+      newDrawActions.push({
+        tool: 'line',
+        x: 440,
+        y: 80,
+        width: 0,
+        height: 560,
+        color: 'rgba(255, 255, 255, 0.2)',
+        size: 2
+      });
+      newDrawActions.push({
+        tool: 'line',
+        x: 80,
+        y: 340,
+        width: 720,
+        height: 0,
+        color: 'rgba(255, 255, 255, 0.2)',
+        size: 2
+      });
+
+      action.quadrants.forEach(q => {
+        newDrawActions.push({
+          tool: 'text',
+          x: q.x,
+          y: q.y,
+          text: q.title,
+          color: q.color || '#ffffff',
+          size: 4
+        });
+      });
+
+      if (action.stickies) {
+        action.stickies.forEach((s, idx) => {
+          newStickyNotes.push({
+            id: `ai_s_${now}_${idx}`,
+            text: s.text,
+            color: bgColors[s.color] || s.color || '#fef08a',
+            colorName: s.color || 'yellow',
+            x: s.x,
+            y: s.y
+          });
+        });
+      }
+    } else if (action.type === 'stickies' && action.stickies) {
+      action.stickies.forEach((s, idx) => {
+        newStickyNotes.push({
+          id: `ai_stk_${now}_${idx}`,
+          text: s.text,
+          color: bgColors[s.color] || s.color || '#fef08a',
+          colorName: s.color || 'yellow',
+          x: s.x || (100 + (idx % 3) * 220),
+          y: s.y || (140 + Math.floor(idx / 3) * 190)
+        });
+      });
+    } else if (action.type === 'organize') {
+      organizeStickyNotes();
+      setAppliedActionIds(prev => [...prev, action.title || action.type]);
+      return;
+    }
+
+    // Commit draw actions to canvas
+    if (newDrawActions.length > 0) {
+      setDrawActions(prev => {
+        const next = [...prev, ...newDrawActions];
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          newDrawActions.forEach(act => {
+            ws.send(JSON.stringify({ type: 'draw', action: act, roomId }));
+          });
+        }
+        setTimeout(() => redrawCanvas(next), 0);
+        return next;
+      });
+    }
+
+    // Commit sticky notes to workspace
+    if (newStickyNotes.length > 0) {
+      setStickyNotes(prev => {
+        const next = [...prev, ...newStickyNotes];
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          newStickyNotes.forEach(note => {
+            ws.send(JSON.stringify({ type: 'sticky_create', note, roomId }));
+          });
+        }
+        return next;
+      });
+    }
+
+    setAppliedActionIds(prev => [...prev, action.title || action.type]);
+    triggerToast(`✨ Agent applied "${action.title || 'Action'}" to whiteboard!`);
+  };
+
+  // Smart Board Auto-Organizer (Re-align scattered stickies)
+  const organizeStickyNotes = () => {
+    if (stickyNotes.length === 0) {
+      triggerToast('No sticky notes on the board to organize.');
+      return;
+    }
+
+    const startX = 100;
+    const startY = 140;
+    const colSpacing = 220;
+    const rowSpacing = 190;
+    const maxPerRow = 3;
+
+    const organized = stickyNotes.map((note, index) => {
+      const col = index % maxPerRow;
+      const row = Math.floor(index / maxPerRow);
+      return {
+        ...note,
+        x: startX + col * colSpacing,
+        y: startY + row * rowSpacing
+      };
+    });
+
+    setStickyNotes(organized);
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'sticky_batch_sync', stickyNotes: organized, roomId }));
+    }
+    triggerToast(`🧹 Cleaned & aligned ${stickyNotes.length} sticky notes!`);
+  };
+
+  // 1-Click Quick Preset Handler
+  const triggerAgentPreset = (presetKey) => {
+    const preset = PRESET_ACTIONS[presetKey];
+    if (!preset) return;
+
+    if (preset.type === 'organize') {
+      organizeStickyNotes();
+      return;
+    }
+
+    const botText = `### ${preset.title}\n\nI have designed the layout for **${preset.title}**. You can click below to deploy the full diagram and stickies directly onto the canvas!\n\n\`\`\`agent_action\n${JSON.stringify(preset, null, 2)}\n\`\`\``;
+    setAiMessages(prev => [
+      ...prev,
+      { role: 'assistant', text: botText }
+    ]);
+  };
+
+  // Speech Recognition Toggle
+  const toggleSpeechRecognition = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      triggerToast('Speech recognition not supported in this browser.');
+      return;
+    }
+
+    if (isListening) {
+      if (speechRecognitionRef.current) {
+        speechRecognitionRef.current.stop();
+      }
+      setIsListening(false);
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+
+      recognition.onstart = () => {
+        setIsListening(true);
+        triggerToast('🎙️ Listening... Speak your prompt now.');
+      };
+
+      recognition.onresult = (event) => {
+        const transcript = Array.from(event.results)
+          .map(result => result[0].transcript)
+          .join('');
+        setAiInput(transcript);
+      };
+
+      recognition.onerror = (event) => {
+        setIsListening(false);
+        if (event.error !== 'no-speech') {
+          triggerToast(`Microphone error: ${event.error}`);
+        }
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      speechRecognitionRef.current = recognition;
+      recognition.start();
+    } catch (err) {
+      console.error('Speech recognition failed:', err);
+      setIsListening(false);
+      triggerToast('Failed to start microphone.');
+    }
+  };
+
+  // AI assistant handlers (Enhanced with dynamic board awareness and Gemini API integration)
+  const simulateAiResponse = async (promptType) => {
+    setIsAiLoading(true);
+    let fullText = '';
+    
+    const notesCount = stickyNotes.length;
+    const drawingsCount = drawActions.length;
+    const chatMsgCount = messages.filter(m => m.type === 'chat').length;
+    const stickyTexts = stickyNotes.map(n => n.text).filter(t => t.trim().length > 0);
+    
+    const lowerPrompt = promptType.toLowerCase();
+
+    let systemContext = `You are the LiveCollab AI Assistant, a friendly and intuitive workspace partner integrated into an interactive collaborative whiteboard room (Room ID: "${roomId}").
+    You have access to the current state of the board:
+    - Drawings: ${drawingsCount} sketches/shapes drawn on the canvas.
+    - Sticky Notes: ${notesCount} active stickies. Content of stickies: ${JSON.stringify(stickyTexts)}.
+    - Recent chat logs: ${JSON.stringify(messages.filter(m => m.type === 'chat').slice(-10).map(m => m.text))}.
+
+    TONE & FORMATTING GUIDELINES (VERY IMPORTANT):
+    1. USER-FRIENDLY & HUMAN: Write in simple, natural, conversational, and easy-to-understand language. Avoid dense academic jargon or overly robotic explanations.
+    2. NO RAW LATEX: NEVER output raw LaTeX syntax like $\\text{...}$, $$, or \\longrightarrow. Write standard formulas using clean text and Unicode subscripts (e.g. write "Water (H₂O)", "Carbon Dioxide (CO₂)", "Glucose (C₆H₁₂O₆)", "Oxygen (O₂)").
+    3. NO CODE BLOCKS FOR GENERAL QUESTIONS: Unless the user explicitly asks for programming code, do not output technical code blocks. Use clean bullet points, short paragraphs, and relevant emojis instead.
+    4. ACTIONABLE & VISUAL: Explain concepts clearly so they are easy to visualize on a whiteboard (suggesting visual sections, quick stickies, or clean takeaways).
+    5. AGENTIC CAPABILITY: When asked to draw, create, layout, or brainstorm a diagram, flowchart, Kanban board, SWOT matrix, or sticky notes, describe it in plain friendly language and include a valid \`\`\`agent_action JSON block at the end (with keys type: 'flowchart' | 'template' | 'stickies' | 'organize', title, nodes, connectors, columns, quadrants, or stickies).\`\`\``;
+
+    let prompt = promptType;
+    if (promptType === 'summary') {
+      prompt = 'Please summarize the current state of our whiteboard room and active discussions.';
+    } else if (promptType === 'tasks') {
+      prompt = 'Please extract action items and checklist tasks from the sticky notes in this whiteboard room.';
+    } else if (promptType === 'notes') {
+      prompt = 'Please generate meeting minutes and notes from our whiteboard room, detailing discussions and next steps.';
+    }
+
+    if (geminiApiKey) {
+      const candidateModels = Array.from(new Set([
+        import.meta.env.VITE_GEMINI_MODEL,
+        'gemini-flash-latest',
+        'gemini-3.5-flash',
+        'gemini-3.1-flash-lite',
+        'gemini-flash-lite-latest',
+        'gemini-3.6-flash'
+      ].filter(Boolean)));
+
+      let directSuccess = false;
+      let lastDirectErr = '';
+
+      for (const model of candidateModels) {
+        try {
+          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              contents: [
+                {
+                  role: 'user',
+                  parts: [
+                    { text: `${systemContext}\n\nUser Question: ${prompt}` }
+                  ]
+                }
+              ]
+            })
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            const parts = data?.candidates?.[0]?.content?.parts || [];
+            const text = parts.map(p => p.text).filter(Boolean).join('\n');
+            if (text) {
+              fullText = text;
+              directSuccess = true;
+              break;
+            }
+          } else {
+            const errData = await res.json().catch(() => ({}));
+            lastDirectErr = errData?.error?.message || `HTTP ${res.status}`;
+            console.warn(`Direct model ${model} failed (${res.status}): ${lastDirectErr}. Trying next model...`);
+          }
+        } catch (err) {
+          lastDirectErr = err.message;
+          console.warn(`Direct model ${model} network error:`, err.message);
+        }
+      }
+
+      // If direct requests failed, attempt backend AI proxy before giving up
+      if (!directSuccess) {
+        try {
+          const proxyRes = await fetch(`${apiBaseUrl}/api/ai`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: `${systemContext}\n\nUser Question: ${prompt}` })
+          });
+          if (proxyRes.ok) {
+            const proxyData = await proxyRes.json();
+            if (proxyData.text) {
+              fullText = proxyData.text;
+              directSuccess = true;
+            }
+          }
+        } catch (proxyErr) {
+          console.warn('Backend proxy fallback also failed:', proxyErr.message);
+        }
+      }
+
+      if (!directSuccess) {
+        // Fall back to intelligent local workspace analysis rather than a hard failure
+        console.warn('All Gemini models and proxy unavailable, using workspace analysis simulator');
+        if (lowerPrompt.includes('photosynthesis') || lowerPrompt.includes('flowchart') || lowerPrompt.includes('diagram')) {
+          fullText = `### Photosynthesis Process Diagram & Flowchart 🌿\n\nPhotosynthesis is how green plants convert solar light energy into chemical energy (glucose) using water and carbon dioxide.\n\n#### The Clean Reaction:\n6CO₂ (Carbon Dioxide) + 6H₂O (Water) + Sunlight ➔ C₆H₁₂O₆ (Glucose) + 6O₂ (Oxygen)\n\nI have generated a complete whiteboard diagram with process hubs, connectors, and reaction stickies!\n\n\`\`\`agent_action\n${JSON.stringify(PRESET_ACTIONS.photosynthesis, null, 2)}\n\`\`\``;
+        } else if (lowerPrompt.includes('kanban') || lowerPrompt.includes('sprint') || lowerPrompt.includes('agile')) {
+          fullText = `### Agile Sprint Kanban Board 📋\n\nHere is your team's sprint board layout organized into To Do, In Progress, and Completed columns with task cards ready to move.\n\n\`\`\`agent_action\n${JSON.stringify(PRESET_ACTIONS.kanban, null, 2)}\n\`\`\``;
+        } else if (lowerPrompt.includes('swot') || lowerPrompt.includes('matrix')) {
+          fullText = `### SWOT Strategic Matrix 📊\n\nHere is a 4-quadrant strategic breakdown analyzing Strengths, Weaknesses, Opportunities, and Threats.\n\n\`\`\`agent_action\n${JSON.stringify(PRESET_ACTIONS.swot, null, 2)}\n\`\`\``;
+        } else if (lowerPrompt.includes('brainstorm') || lowerPrompt.includes('idea') || lowerPrompt.includes('stickies') || lowerPrompt.includes('sticky')) {
+          fullText = `### Innovation Brainstorming Cluster 💡\n\nI have created a cluster of ideation cards for your collaborative brainstorming session.\n\n\`\`\`agent_action\n${JSON.stringify(PRESET_ACTIONS.brainstorm, null, 2)}\n\`\`\``;
+        } else if (promptType === 'summary' || lowerPrompt.includes('summary') || lowerPrompt.includes('summarize') || lowerPrompt.includes('board')) {
+          fullText = `### LiveCollab Workspace Summary 📊\n\nI have scanned the active canvas, sticky elements, and team chat:\n* **Whiteboard Details**: Detected **${drawingsCount} sketches/shapes** drawn on the board.\n* **Sticky Workspace**: Identified **${notesCount} active sticky notes**.\n* **Collaboration Hub**: Exchanged **${chatMsgCount} team chat logs** in this room.\n\n#### Key Focus Areas:\n1. **Dynamic Whiteboarding**: Concentration of visual sketches suggests active mockup layout iteration.\n2. **Draggable Tasks**: Sticky elements map structural dependencies. ${stickyTexts.length > 0 ? `The team is discussing: ${stickyTexts.map(t => `"${t}"`).join(', ')}.` : 'No custom tasks written on stickies yet.'}`;
+        } else if (promptType === 'tasks' || lowerPrompt.includes('task') || lowerPrompt.includes('todo') || lowerPrompt.includes('checklist')) {
+          const extracted = stickyNotes
+            .map((n, i) => `  ${i + 1}. **Sticky Task [${(n.colorName || 'yellow').toUpperCase()}]**: "${n.text.substring(0, 50)}${n.text.length > 50 ? '...' : ''}"`)
+            .join('\n');
+          fullText = `### Automated Task Extraction 📋\n\nHere is your team's checklist built directly from active sticky notes:\n\n${extracted || '  1. **Default Action**: Initialize whiteboard designs.\n  2. **WS Test**: Open multi-window sync validation.\n  3. **Interface check**: Verify light/dark style parameters.'}\n\n*You can copy this list directly into your planning issues.*`;
+        } else if (promptType === 'notes' || lowerPrompt.includes('note') || lowerPrompt.includes('meeting')) {
+          fullText = `### Automated Meeting Notes 📝\n* **Workspace ID**: Room \`${roomId}\`\n* **Active Collab Users**: ${roomUsers} member(s)\n* **Technical Decisions**: High availability failover handles transient network and load fluctuations.\n\n**Next Action Items**:\n${stickyTexts.length > 0 ? stickyTexts.map(t => `- Follow up on: "${t}"`).join('\n') : '- Standardize responsive styling variables.\n- Polish whiteboard canvas layouts.'}`;
+        } else {
+          fullText = `### LiveCollab Assistant 💡\n\n${lastDirectErr ? `*(Note: Gemini servers are experiencing transient high demand. Response generated with board intelligence)*\n\n` : ''}Based on the active workspace with **${drawingsCount} canvas elements** and **${notesCount} sticky notes**, collaboration is actively underway. If you need a full summary, diagram, or action items extracted, choose from the quick-prompt buttons above!`;
+        }
+      }
+    } else {
+      try {
+        const res = await fetch(`${apiBaseUrl}/api/ai`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            prompt: `${systemContext}\n\nUser Question: ${prompt}`
+          })
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData?.error || `HTTP ${res.status}`);
+        }
+
+        const data = await res.json();
+        fullText = data.text;
+      } catch (backendErr) {
+        console.warn('Backend AI proxy failed or was unconfigured.', backendErr);
+        if (hasBackendKey) {
+          fullText = `### Gemini API Proxy Error ⚠️\n\nThe backend AI proxy returned an error. This usually indicates that the environment variable on Render is invalid, expired, or has an incorrect name.\n\n**Details**: ${backendErr.message}`;
+        } else {
+          // Running local simulation fallback
+          if (promptType === 'summary' || lowerPrompt.includes('summary') || lowerPrompt.includes('summarize') || lowerPrompt.includes('board')) {
+            fullText = `### LiveCollab Workspace Summary 📊\n\nI have scanned the active canvas, sticky elements, and team chat:\n* **Whiteboard Details**: Detected **${drawingsCount} sketches/shapes** drawn on the board.\n* **Sticky Workspace**: Identified **${notesCount} active sticky notes**.\n* **Collaboration Hub**: Exchanged **${chatMsgCount} team chat logs** in this room.\n\n#### Key Focus Areas:\n1. **Dynamic Whiteboarding**: Concentration of visual sketches suggests active mockup layout iteration.\n2. **Draggable Tasks**: Sticky elements map structural dependencies. ${stickyTexts.length > 0 ? `The team is discussing: ${stickyTexts.map(t => `"${t}"`).join(', ')}.` : 'No custom tasks written on stickies yet.'}`;
+          } else if (promptType === 'tasks' || lowerPrompt.includes('task') || lowerPrompt.includes('todo') || lowerPrompt.includes('checklist')) {
+            const extracted = stickyNotes
+              .map((n, i) => `  ${i + 1}. **Sticky Task [${n.colorName.toUpperCase()}]**: "${n.text.substring(0, 50)}${n.text.length > 50 ? '...' : ''}"`)
+              .join('\n');
+            
+            fullText = `### Automated Task Extraction 📋\n\nHere is your team's checklist built directly from active sticky notes:\n\n${extracted || '  1. **Default Action**: Initialize whiteboard designs.\n  2. **WS Test**: Open multi-window sync validation.\n  3. **Interface check**: Verify light/dark style parameters.'}\n\n*You can copy this list directly into your planning issues.*`;
+          } else if (promptType === 'notes' || lowerPrompt.includes('note') || lowerPrompt.includes('meeting')) {
+            fullText = `### Automated Meeting Notes 📝\n* **Workspace ID**: Room \`${roomId}\`\n* **Active Collab Users**: ${roomUsers} member(s)\n* **Technical Decisions**: Database fallback handles ENOTFOUND/timeout DNS conditions with in-memory fallback buffers.\n\n**Next Action Items**:\n${stickyTexts.length > 0 ? stickyTexts.map(t => `- Follow up on: "${t}"`).join('\n') : '- Standardize responsive styling variables.\n- Polish Outfit theme selectors.'}`;
+          } else {
+            // Check for general knowledge questions
+            if (lowerPrompt.includes('photosynthesis') || lowerPrompt.includes('photo synthesis') || lowerPrompt.includes('flowchart') || lowerPrompt.includes('diagram')) {
+              fullText = `### Photosynthesis 🌿\n\nPhotosynthesis is the chemical process by which green plants, algae, and some bacteria convert light energy into chemical energy (glucose), using carbon dioxide and water.\n\n#### The Chemical Formula:\n\`\`\`\n6CO₂ (Carbon Dioxide) + 6H₂O (Water) + Light Energy ➔ C₆H₁₂O₆ (Glucose) + 6O₂ (Oxygen)\n\`\`\`\n\n#### Key Process Steps:\n1. **Light Absorption**: Chlorophyll inside plant chloroplasts captures solar energy.\n2. **Water Splitting**: Water molecules absorbed by roots are split into oxygen gas and hydrogen ions.\n3. **Carbon Fixation**: Carbon dioxide from the air is processed to form sugars (glucose).\n\n\`\`\`agent_action\n${JSON.stringify(PRESET_ACTIONS.photosynthesis, null, 2)}\n\`\`\``;
+            } else if (lowerPrompt.includes('kanban') || lowerPrompt.includes('sprint') || lowerPrompt.includes('agile')) {
+              fullText = `### Agile Sprint Kanban Board 📋\n\nHere is your sprint board layout categorized into To Do, In Progress, and Completed zones with starter task cards.\n\n\`\`\`agent_action\n${JSON.stringify(PRESET_ACTIONS.kanban, null, 2)}\n\`\`\``;
+            } else if (lowerPrompt.includes('swot') || lowerPrompt.includes('matrix')) {
+              fullText = `### SWOT Strategic Matrix 📊\n\nHere is a 4-quadrant strategic breakdown analyzing Strengths, Weaknesses, Opportunities, and Threats.\n\n\`\`\`agent_action\n${JSON.stringify(PRESET_ACTIONS.swot, null, 2)}\n\`\`\``;
+            } else if (lowerPrompt.includes('brainstorm') || lowerPrompt.includes('idea') || lowerPrompt.includes('sticky')) {
+              fullText = `### Innovation Brainstorming Cluster 💡\n\nI have generated a cluster of ideation cards for your team.\n\n\`\`\`agent_action\n${JSON.stringify(PRESET_ACTIONS.brainstorm, null, 2)}\n\`\`\``;
+            } else if (lowerPrompt.includes('gravity') || lowerPrompt.includes('gravitation')) {
+              fullText = `### Gravity 🌌\n\nGravity is a fundamental force of attraction that acts between all objects with mass. The more mass an object has, and the closer it is, the stronger its gravitational pull.\n\n#### Key Milestones:\n* **Sir Isaac Newton (1687)**: Formulated the Law of Universal Gravitation, stating that every mass exerts an attractive force on every other mass.\n* **Albert Einstein (1915)**: Described gravity not as a direct force, but as a curvature of spacetime caused by mass and energy (Theory of General Relativity).\n\nWithout gravity, planets could not orbit the sun, and the atmosphere, oceans, and life could not remain bound to Earth.`;
+            } else if (lowerPrompt.includes('javascript') || lowerPrompt.includes(' js')) {
+              fullText = `### JavaScript (JS) 💻\n\nJavaScript is a high-level, dynamic, single-threaded, and interpreted programming language that conforms to the ECMAScript specification.\n\n#### Core Concepts:\n* **Prototypes**: Objects inherit properties directly from other template objects.\n* **Asynchronous Event Loop**: Handles non-blocking execution using callbacks, promises, and async/await.\n* **First-Class Functions**: Functions can be passed as arguments, returned, and assigned to variables.`;
+            } else if (lowerPrompt.includes('react')) {
+              fullText = `### ReactJS ⚛️\n\nReact is a declarative, component-based JavaScript library for building interactive user interfaces, maintained by Meta and a large developer community.\n\n#### Key Features:\n1. **JSX**: A syntax extension that allows writing HTML elements inside JavaScript.\n2. **Virtual DOM**: React keeps a lightweight representation of the UI in memory, batch-updating only the modified elements to improve rendering speed.\n3. **Component Lifecycle & Hooks**: Hooks (like \`useState\`, \`useEffect\`) allow functional components to manage local state and side effects.`;
+            } else if (lowerPrompt.includes('who are you') || lowerPrompt.includes('what are you') || lowerPrompt.includes('your name')) {
+              fullText = `I am the **LiveCollab AI Assistant**, a smart workspace agent built to help teams brainstorm, write, design, and plan projects in real-time.\n\n#### What I Can Do:\n1. **Analyze Whiteboard**: Summarize drawing lines and shapes on the canvas.\n2. **Extract Tasks**: Scan your sticky notes and compile them into action checklists.\n3. **General Knowledge**: Answer general questions regarding science, math, history, coding, and design.\n4. **Meeting Minutes**: Generate notes and logs from the current session.`;
+            } else if (lowerPrompt.startsWith('what') || lowerPrompt.startsWith('how') || lowerPrompt.startsWith('why') || lowerPrompt.startsWith('explain') || lowerPrompt.startsWith('who') || lowerPrompt.includes('?') || lowerPrompt.length > 15) {
+              // General question fallback template
+              fullText = `### Workspace Brainstorming: ${promptType} 🧠\n\nHere is a conceptual analysis for your query: **"${promptType}"**.\n\n#### 1. Contextual Definition\nThe topic **"${promptType}"** refers to a core domain subject. In collaborative design, breaking this down into modular steps enables team members to build shared understanding.\n\n#### 2. Key Considerations\n* **Research**: Gather structural facts and references to validate assumptions.\n* **Design**: Draw block diagrams on this whiteboard to outline flows or architectures.\n* **Tasks**: Drop sticky notes to assign specific follow-up actions to collaborators.\n\nWould you like me to generate a checklist of tasks or compile whiteboard session notes related to this topic?`;
+            } else {
+              // Context-aware board response
+              if (stickyTexts.length > 0) {
+                fullText = `I have analyzed the active workspace regarding your query: "${promptType}". Based on the sticky notes (${stickyTexts.map(t => `"${t}"`).join(', ')}):\n\n* **Discussion Theme**: It looks like you are collaborating on these items.\n* **Drawing Stats**: There are also ${drawingsCount} drawing lines or shapes on the canvas.\n\nWould you like me to compile notes, checklists, or summaries from these elements?`;
+              } else {
+                fullText = `I scanned the board for "${promptType}" but it is currently empty. Please drop some sticky notes or draw on the whiteboard, then ask me to summarize, extract tasks, or draft meeting notes!`;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    fullText = cleanLatexMath(fullText);
+
+    setAiMessages(prev => [...prev, { role: 'assistant', text: '' }]);
+    
+    let currentText = '';
+    let charIndex = 0;
+    const interval = setInterval(() => {
+      if (charIndex < fullText.length) {
+        currentText += fullText.substring(charIndex, charIndex + 4);
+        setAiMessages(prev => {
+          const next = [...prev];
+          next[next.length - 1] = { role: 'assistant', text: currentText };
+          return next;
+        });
+        charIndex += 4;
+      } else {
+        clearInterval(interval);
+        setIsAiLoading(false);
+        // If the AI panel is closed, trigger unread badge notification
+        if (!isAiPanelOpenRef.current) {
+          setUnreadAi(true);
+        }
+      }
+    }, 15);
+  };
+
+  const handleAiSend = (e) => {
+    e.preventDefault();
+    if (!aiInput.trim()) return;
+    const userMsg = aiInput.trim();
+    setAiInput('');
+    setAiMessages(prev => [...prev, { role: 'user', text: userMsg }]);
+    
+    setTimeout(() => {
+      simulateAiResponse(userMsg);
+    }, 500);
+  };
+
+  // Text Chat handler
+  const handleSendMessage = (e) => {
+    e.preventDefault();
+    if (inputMsg.trim() && ws) {
+      const msg = { type: 'chat', text: inputMsg, roomId };
+      ws.send(JSON.stringify(msg));
+      setMessages(prev => [...prev, { ...msg, senderId: clientId }]);
+      setInputMsg('');
+    }
+  };
+
+  // ========== WebRTC Peer Connection Logic ==========
+  const ICE_SERVERS = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun3.l.google.com:19302' },
+    { urls: 'stun:stun4.l.google.com:19302' }
+  ];
+
+  const createPeerConnection = (peerId) => {
+    // If we have an existing healthy peer connection, reuse it
+    let pc = peerConnectionsRef.current.get(peerId);
+    if (pc && pc.connectionState !== 'closed' && pc.connectionState !== 'failed') {
+      return pc;
+    }
+
+    if (pc) {
+      pc.close();
+    }
+
+    pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+
+    // Send ICE candidates to the remote peer via signaling
+    pc.onicecandidate = (event) => {
+      if (event.candidate && wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({
+          type: 'webrtc-ice-candidate',
+          targetId: peerId,
+          candidate: event.candidate
+        }));
+      }
+    };
+
+    // Handle incoming remote media tracks
+    pc.ontrack = (event) => {
+      setRemoteStreams(prev => {
+        const existingStream = prev[peerId] || new MediaStream();
+        if (!existingStream.getTracks().includes(event.track)) {
+          existingStream.addTrack(event.track);
+        }
+        return { ...prev, [peerId]: existingStream };
+      });
+      // Auto-show video strip when remote stream arrives
+      setIsVideoStripVisible(true);
+    };
+
+    // Handle connection state changes
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+        cleanupPeer(peerId);
+      }
+    };
+
+    // Add local tracks if available
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach(track => {
+        pc.addTrack(track, localStreamRef.current);
+      });
+    }
+
+    peerConnectionsRef.current.set(peerId, pc);
+    pendingCandidatesRef.current.set(peerId, []);
+    return pc;
+  };
+
+  // Initiate a connection to a peer (called by the existing user when a new user joins)
+  const connectToPeer = async (peerId) => {
+    try {
+      const pc = createPeerConnection(peerId);
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({
+          type: 'webrtc-offer',
+          targetId: peerId,
+          offer: pc.localDescription
+        }));
+      }
+    } catch (err) {
+      console.error('Error creating WebRTC offer:', err);
+    }
+  };
+
+  // Handle incoming WebRTC offer
+  const handleWebRTCOffer = async (senderId, offer) => {
+    try {
+      const pc = createPeerConnection(senderId);
+      await pc.setRemoteDescription(new RTCSessionDescription(offer));
+      
+      // Flush any pending ICE candidates
+      const pending = pendingCandidatesRef.current.get(senderId) || [];
+      for (const candidate of pending) {
+        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      }
+      pendingCandidatesRef.current.set(senderId, []);
+
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({
+          type: 'webrtc-answer',
+          targetId: senderId,
+          answer: pc.localDescription
+        }));
+      }
+    } catch (err) {
+      console.error('Error handling WebRTC offer:', err);
+    }
+  };
+
+  // Handle incoming WebRTC answer
+  const handleWebRTCAnswer = async (senderId, answer) => {
+    try {
+      const pc = peerConnectionsRef.current.get(senderId);
+      if (pc) {
+        await pc.setRemoteDescription(new RTCSessionDescription(answer));
+        
+        // Flush any pending ICE candidates
+        const pending = pendingCandidatesRef.current.get(senderId) || [];
+        for (const candidate of pending) {
+          await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        }
+        pendingCandidatesRef.current.set(senderId, []);
+      }
+    } catch (err) {
+      console.error('Error handling WebRTC answer:', err);
+    }
+  };
+
+  // Handle incoming ICE candidate
+  const handleICECandidate = async (senderId, candidate) => {
+    try {
+      const pc = peerConnectionsRef.current.get(senderId);
+      if (pc && pc.remoteDescription) {
+        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      } else {
+        // Queue candidates until remote description is set
+        if (!pendingCandidatesRef.current.has(senderId)) {
+          pendingCandidatesRef.current.set(senderId, []);
+        }
+        pendingCandidatesRef.current.get(senderId).push(candidate);
+      }
+    } catch (err) {
+      console.error('Error adding ICE candidate:', err);
+    }
+  };
+
+  // Add/replace local tracks on all existing peer connections (when camera/mic is toggled)
+  const addLocalTracksToPeers = async () => {
+    const stream = localStreamRef.current;
+    if (!stream) return;
+
+    for (const [peerId, pc] of peerConnectionsRef.current.entries()) {
+      const senders = pc.getSenders();
+      let needsNegotiation = false;
+      
+      stream.getTracks().forEach(track => {
+        const existingSender = senders.find(s => s.track && s.track.kind === track.kind);
+        if (existingSender) {
+          existingSender.replaceTrack(track);
+        } else {
+          pc.addTrack(track, stream);
+          needsNegotiation = true;
+        }
+      });
+
+      if (needsNegotiation) {
+        try {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          if (wsRef.current?.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({
+              type: 'webrtc-offer',
+              targetId: peerId,
+              offer: pc.localDescription
+            }));
+          }
+        } catch (err) {
+          console.error(`Error renegotiating with peer ${peerId}:`, err);
+        }
+      }
+    }
+  };
+
+  // Cleanup a single peer connection
+  const cleanupPeer = (peerId) => {
+    const pc = peerConnectionsRef.current.get(peerId);
+    if (pc) {
+      pc.close();
+      peerConnectionsRef.current.delete(peerId);
+    }
+    pendingCandidatesRef.current.delete(peerId);
+    setRemoteStreams(prev => {
+      const next = { ...prev };
+      delete next[peerId];
+      return next;
+    });
+  };
+
+  // Cleanup all peer connections
+  const cleanupAllPeers = () => {
+    peerConnectionsRef.current.forEach((pc) => pc.close());
+    peerConnectionsRef.current.clear();
+    pendingCandidatesRef.current.clear();
+    setRemoteStreams({});
+  };
+  // ========== End WebRTC Logic ==========
+
+  const initMediaStream = async (audioEnabled, videoEnabled) => {
+    try {
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach(t => t.stop());
+      }
+      
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: true
+      });
+      
+      localStreamRef.current = stream;
+      stream.getAudioTracks().forEach(t => t.enabled = audioEnabled);
+      stream.getVideoTracks().forEach(t => t.enabled = videoEnabled);
+      
+      setHasCameraPermission(true);
+      await addLocalTracksToPeers();
+    } catch (err) {
+      console.warn("Could not access camera/mic:", err);
+      setHasCameraPermission(false);
+      setMediaState(prev => ({ ...prev, camera: false, mic: false }));
+    }
+  };
+
+  const stopLocalStream = () => {
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach(t => t.stop());
+      localStreamRef.current = null;
+    }
+    setHasCameraPermission(false);
+  };
+
+  const toggleMedia = async (type) => {
+    if (type === 'mic') {
+      const nextMicState = !mediaState.mic;
+      setMediaState(prev => ({ ...prev, mic: nextMicState }));
+      if (localStreamRef.current) {
+        localStreamRef.current.getAudioTracks().forEach(t => t.enabled = nextMicState);
+      } else if (nextMicState) {
+        await initMediaStream(nextMicState, mediaState.camera);
+      }
+      // Auto-show video strip when mic is on
+      if (nextMicState) setIsVideoStripVisible(true);
+      // Auto-hide when both mic and camera are off
+      if (!nextMicState && !mediaState.camera) setIsVideoStripVisible(false);
+    } else if (type === 'camera') {
+      const nextCamState = !mediaState.camera;
+      setMediaState(prev => ({ ...prev, camera: nextCamState }));
+      if (localStreamRef.current) {
+        localStreamRef.current.getVideoTracks().forEach(t => t.enabled = nextCamState);
+        if (!nextCamState && !mediaState.mic) {
+          stopLocalStream();
+        }
+      } else if (nextCamState) {
+        await initMediaStream(mediaState.mic, nextCamState);
+      }
+      // Auto-show video strip when camera is on
+      if (nextCamState) setIsVideoStripVisible(true);
+      // Auto-hide when both mic and camera are off
+      if (!nextCamState && !mediaState.mic) setIsVideoStripVisible(false);
+    } else if (type === 'screen') {
+      if (mediaState.screen) {
+        stopScreenShare();
+      } else {
+        await startScreenShare();
+      }
+    }
+  };
+
+  const startScreenShare = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+      setScreenStream(stream);
+      setMediaState(prev => ({ ...prev, screen: true }));
+      stream.getVideoTracks()[0].onended = () => {
+        stopScreenShare();
+      };
+    } catch (err) {
+      console.warn("Screen sharing failed:", err);
+      setMediaState(prev => ({ ...prev, screen: false }));
+    }
+  };
+
+  const stopScreenShare = () => {
+    if (screenStream) {
+      screenStream.getTracks().forEach(t => t.stop());
+      setScreenStream(null);
+    }
+    setMediaState(prev => ({ ...prev, screen: false }));
+  };
+
+  // Draggable Screen Share Window Handlers
+  const handleScreenDragStart = (e) => {
+    e.preventDefault();
+    setIsDraggingScreen(true);
+    screenDragStart.current = {
+      x: e.clientX - screenPosition.x,
+      y: e.clientY - screenPosition.y
+    };
+    e.target.setPointerCapture(e.pointerId);
+  };
+
+  const handleScreenDragMove = (e) => {
+    if (!isDraggingScreen) return;
+    const newX = e.clientX - screenDragStart.current.x;
+    const newY = e.clientY - screenDragStart.current.y;
+    setScreenPosition({ x: newX, y: newY });
+  };
+
+  const handleScreenDragEnd = (e) => {
+    setIsDraggingScreen(false);
+  };
+
+  const handleScreenResizeStart = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsResizingScreen(true);
+    screenResizeStart.current = {
+      x: e.clientX,
+      y: e.clientY,
+      width: screenSize.width,
+      height: screenSize.height
+    };
+    e.target.setPointerCapture(e.pointerId);
+  };
+
+  const handleScreenResizeMove = (e) => {
+    if (!isResizingScreen) return;
+    const deltaX = e.clientX - screenResizeStart.current.x;
+    const deltaY = e.clientY - screenResizeStart.current.y;
+    setScreenSize({
+      width: Math.max(200, screenResizeStart.current.width + deltaX),
+      height: Math.max(150, screenResizeStart.current.height + deltaY)
+    });
+  };
+
+  const handleScreenResizeEnd = (e) => {
+    setIsResizingScreen(false);
+  };
+
+  // Raise Hand Handler
+  const toggleRaiseHand = () => {
+    const nextState = !handRaised;
+    setHandRaised(nextState);
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'raise_hand', raised: nextState, roomId }));
+    }
+  };
+
+  // Offscreen draw helpers for export
+  const drawDottedGrid = (canvas, ctx) => {
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+    const size = 20;
+    for (let x = 0; x < canvas.width; x += size) {
+      for (let y = 0; y < canvas.height; y += size) {
+        ctx.beginPath();
+        ctx.arc(x, y, 1.2, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+    }
+  };
+
+  const drawLinesGrid = (canvas, ctx) => {
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+    ctx.lineWidth = 1;
+    const size = 20;
+    for (let x = 0; x < canvas.width; x += size) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, canvas.height);
+      ctx.stroke();
+    }
+    for (let y = 0; y < canvas.height; y += size) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(canvas.width, y);
+      ctx.stroke();
+    }
+  };
+
+  // Export board as PNG
+  const exportBoardAsPng = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    const exportCanvas = document.createElement('canvas');
+    exportCanvas.width = canvas.width;
+    exportCanvas.height = canvas.height;
+    const exportCtx = exportCanvas.getContext('2d');
+    
+    // Background Slate
+    exportCtx.fillStyle = '#0b0f19'; // clean dark editor slate color
+    exportCtx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+    
+    if (gridType === 'dotted') {
+      drawDottedGrid(exportCanvas, exportCtx);
+    } else if (gridType === 'lines') {
+      drawLinesGrid(exportCanvas, exportCtx);
+    }
+    
+    // Copy main drawings
+    exportCtx.drawImage(canvas, 0, 0);
+
+    // Render Sticky Notes onto Export Canvas
+    if (stickyNotes && stickyNotes.length > 0) {
+      const bgMap = {
+        yellow: '#fef08a',
+        pink: '#fbcfe8',
+        blue: '#bae6fd',
+        green: '#bbf7d0'
+      };
+      const textMap = {
+        yellow: '#713f12',
+        pink: '#831843',
+        blue: '#0369a1',
+        green: '#14532d'
+      };
+
+      stickyNotes.forEach(note => {
+        const noteX = note.x;
+        const noteY = note.y;
+        const noteW = 180;
+        const noteH = 160;
+        const noteBg = note.color || bgMap[note.colorName] || '#fef08a';
+        const noteColor = textMap[note.colorName] || '#1e293b';
+
+        // Draw drop shadow
+        exportCtx.save();
+        exportCtx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+        exportCtx.shadowBlur = 10;
+        exportCtx.shadowOffsetX = 3;
+        exportCtx.shadowOffsetY = 4;
+
+        // Rounded sticky note rectangle
+        const r = 8;
+        exportCtx.beginPath();
+        exportCtx.moveTo(noteX + r, noteY);
+        exportCtx.lineTo(noteX + noteW - r, noteY);
+        exportCtx.quadraticCurveTo(noteX + noteW, noteY, noteX + noteW, noteY + r);
+        exportCtx.lineTo(noteX + noteW, noteY + noteH - r);
+        exportCtx.quadraticCurveTo(noteX + noteW, noteY + noteH, noteX + noteW - r, noteY + noteH);
+        exportCtx.lineTo(noteX + r, noteY + noteH);
+        exportCtx.quadraticCurveTo(noteX, noteY + noteH, noteX, noteY + noteH - r);
+        exportCtx.lineTo(noteX, noteY + r);
+        exportCtx.quadraticCurveTo(noteX, noteY, noteX + r, noteY);
+        exportCtx.closePath();
+
+        exportCtx.fillStyle = noteBg;
+        exportCtx.fill();
+        exportCtx.restore();
+
+        // Top pin dot
+        exportCtx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+        exportCtx.beginPath();
+        exportCtx.arc(noteX + noteW / 2, noteY + 12, 3.5, 0, Math.PI * 2);
+        exportCtx.fill();
+
+        // Word-wrap sticky note text
+        exportCtx.fillStyle = noteColor;
+        exportCtx.font = '500 13px Inter, sans-serif';
+        exportCtx.textBaseline = 'top';
+
+        const words = (note.text || 'Sticky Note').split(' ');
+        let curLine = '';
+        let textY = noteY + 26;
+        const maxTextW = noteW - 22;
+
+        for (let i = 0; i < words.length; i++) {
+          const testLine = curLine + words[i] + ' ';
+          const metrics = exportCtx.measureText(testLine);
+          if (metrics.width > maxTextW && i > 0) {
+            exportCtx.fillText(curLine, noteX + 11, textY);
+            curLine = words[i] + ' ';
+            textY += 18;
+            if (textY > noteY + noteH - 18) break;
+          } else {
+            curLine = testLine;
+          }
+        }
+        if (textY <= noteY + noteH - 18) {
+          exportCtx.fillText(curLine, noteX + 11, textY);
+        }
+      });
+    }
+    
+    const link = document.createElement('a');
+    link.download = `livecollab-board-${roomId}-${Date.now()}.png`;
+    link.href = exportCanvas.toDataURL('image/png');
+    link.click();
+    setIsMoreMenuOpen(false);
+  };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      stopLocalStream();
+      stopScreenShare();
+    };
+  }, []);
+
+  const copyRoomLink = () => {
+    navigator.clipboard.writeText(window.location.href);
+    alert('Room link copied to clipboard!');
+  };
+
+  return (
+    <div className="room-layout">
+      {toastMessage && (
+        <div className="agent-toast-notification">
+          <Sparkles size={16} />
+          <span>{toastMessage}</span>
+        </div>
+      )}
+      {/* Top Bar */}
+      <header className="glass room-top-bar">
+        <div className="room-info" style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+          <img 
+            src="/logo.png" 
+            alt="LiveCollab" 
+            style={{ 
+              height: '32px', 
+              width: 'auto', 
+              backgroundColor: theme === 'dark' ? '#ffffff' : 'transparent', 
+              padding: '4px', 
+              borderRadius: '8px', 
+              boxShadow: theme === 'dark' ? '0 2px 8px rgba(0, 0, 0, 0.2)' : 'none',
+              objectFit: 'contain'
+            }} 
+          />
+          <div className="room-title">
+            <h2 className="text-gradient">Board: {roomId}</h2>
+            <span className="live-badge">LIVE</span>
+          </div>
+          {joinError && <p className="text-secondary text-sm">{joinError}</p>}
+        </div>
+        
+        <div className="room-actions">
+          <div className="facepile">
+            <div className="avatar extra-count active-speaker">ME</div>
+            {roomUsers > 1 && <div className="avatar extra-count">U1</div>}
+            {roomUsers > 2 && <div className="avatar extra-count">U2</div>}
+            {roomUsers > 3 && <div className="avatar extra-count">+{roomUsers - 3}</div>}
+          </div>
+          
+          <button className="btn-secondary btn-sm" onClick={copyRoomLink} style={{ padding: '0.4rem 0.8rem' }}>
+            <Link size={16} style={{marginRight:'0.3rem'}}/> Link
+          </button>
+          <button className="btn-primary btn-sm flex-center" onClick={copyRoomLink}>
+            <UserPlus size={16} style={{ marginRight: '0.4rem' }} /> Invite
+          </button>
+          <button className="btn-danger btn-sm" onClick={() => navigate('/dashboard')}>End Session</button>
+        </div>
+      </header>
+
+      {/* Main Grid Layout */}
+      <div className="room-body">
+        
+        {/* Left Sidebar */}
+        {isLeftSidebarOpen && (
+          <aside className="glass-panel left-sidebar">
+          <div className="sidebar-tabs">
+            <button title="Group Chat" className={`tab-btn ${activeLeftTab === 'chat' ? 'active' : ''}`} onClick={() => setActiveLeftTab('chat')}>
+              <MessageSquare size={20} />
+            </button>
+            <button title="Users List" className={`tab-btn ${activeLeftTab === 'users' ? 'active' : ''}`} onClick={() => setActiveLeftTab('users')}>
+              <Users size={20} />
+            </button>
+            <button title="Files Locker" className={`tab-btn ${activeLeftTab === 'files' ? 'active' : ''}`} onClick={() => setActiveLeftTab('files')}>
+              <FolderOpen size={20} />
+            </button>
+            <button title="Board Sessions" className={`tab-btn ${activeLeftTab === 'history' ? 'active' : ''}`} onClick={() => setActiveLeftTab('history')}>
+              <HistoryIcon size={20} />
+            </button>
+          </div>
+          
+          <div className="sidebar-content">
+            {activeLeftTab === 'chat' && (
+              <div className="chat-container">
+                <div className="chat-messages" ref={chatMessagesRef}>
+                  <div className="message system">Welcome to {roomId}</div>
+                  {messages.map((m, i) => (
+                    <div key={i} className={`message ${m.type === 'system' ? 'system' : (m.senderId === clientId ? 'me' : 'other')}`}>
+                      {m.type !== 'system' && m.senderId !== clientId && <span className="sender-name">User {m.senderId.slice(0, 4)}</span>}
+                      {m.type === 'system' ? m.text : <div className="bubble">{m.text}</div>}
+                    </div>
+                  ))}
+                  <div ref={chatBottomRef} />
+                </div>
+                <form onSubmit={handleSendMessage} className="chat-input-area">
+                  <div className="input-group">
+                    <input 
+                      type="text" 
+                      value={inputMsg} 
+                      onChange={e => setInputMsg(e.target.value)} 
+                      placeholder="Type a message..." 
+                      className="input-glass"
+                    />
+                    <button type="submit" className="btn-send"><Send size={16} /></button>
+                  </div>
+                </form>
+              </div>
+            )}
+            {activeLeftTab === 'users' && (
+              <div className="users-tab-content">
+                <div className="user-item-row">
+                  <div className="avatar me-avatar">ME</div>
+                  <div className="user-details">
+                    <span className="user-name">You (Developer)</span>
+                    <span className="user-badge-status">Host</span>
+                  </div>
+                </div>
+                {roomUsers > 1 && [...Array(roomUsers - 1)].map((_, i) => (
+                  <div key={i} className="user-item-row">
+                    <div className="avatar other-avatar">U{i+1}</div>
+                    <div className="user-details">
+                      <span className="user-name">Collaborator {i + 1}</span>
+                      <span className="user-badge-status online">Connected</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {activeLeftTab !== 'chat' && activeLeftTab !== 'users' && (
+              <div className="empty-state" style={{flex: 1, padding: '2rem'}}>
+                <div className="empty-icon-wrap" style={{width: '48px', height: '48px', marginBottom: '1rem'}}>
+                  {activeLeftTab === 'files' && <FolderOpen size={24} className="text-secondary" />}
+                  {activeLeftTab === 'history' && <HistoryIcon size={24} className="text-secondary" />}
+                </div>
+                <p className="text-secondary text-center text-sm">No {activeLeftTab} found in this room yet.</p>
+              </div>
+            )}
+          </div>
+        </aside>
+        )}
+
+        {/* Center Canvas */}
+        <main className={`canvas-area ${gridType}-grid`}>
+          {/* Top Floating Video Strip */}
+          {/* Top Floating Video Strip */}
+          {isVideoStripVisible && (
+            <div 
+              className="video-strip" 
+              style={{ ...getVideoStripStyle(), display: 'flex', alignItems: 'center', gap: '1rem', zIndex: 10, cursor: 'grab', position: 'absolute' }}
+              onPointerDown={handleVideoDragStart}
+              onPointerMove={handleVideoDragMove}
+              onPointerUp={handleVideoDragEnd}
+            >
+              {/* Close Button Overlay */}
+              <button 
+                title="Hide Video Feeds"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsVideoStripVisible(false);
+                }}
+                className="hide-feeds-btn"
+                style={{
+                  position: 'absolute',
+                  top: '-8px',
+                  right: '-8px',
+                  background: '#ef4444',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '20px',
+                  height: '20px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  zIndex: 50,
+                  boxShadow: 'var(--shadow-sm)',
+                  fontSize: '12px',
+                  lineHeight: 1
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = '#dc2626'}
+                onMouseLeave={e => e.currentTarget.style.background = '#ef4444'}
+              >
+                <X size={12} />
+              </button>
+
+              {/* Local Video Tile */}
+              <div className={`video-tile bounce-hover ${mediaState.camera ? 'active' : ''} ${handRaised ? 'raised-hand-glow' : ''}`}>
+                {mediaState.camera && hasCameraPermission ? (
+                  <video 
+                    ref={localVideoRefCallback} 
+                    autoPlay 
+                    playsInline 
+                    muted 
+                    className="video-feed" 
+                  />
+                ) : (
+                  <div className="video-placeholder me-cam">ME</div>
+                )}
+                <div className="tile-name">
+                  You {!mediaState.mic && <MicOff size={11} style={{marginLeft:'4px'}} color="#ef4444"/>}
+                  {handRaised && <span className="hand-badge" style={{marginLeft: '6px'}}>✋</span>}
+                </div>
+              </div>
+
+              {/* Remote Video Tiles */}
+              {peers.map((peerId) => {
+                const stream = remoteStreams[peerId];
+                const hasVideo = stream && stream.getVideoTracks().length > 0 && stream.getVideoTracks()[0].enabled;
+                const isMuted = !stream || stream.getAudioTracks().length === 0 || !stream.getAudioTracks()[0].enabled;
+                const isHandRaised = raisedHands[peerId];
+
+                return (
+                  <div key={peerId} className={`video-tile bounce-hover ${isHandRaised ? 'raised-hand-glow' : ''}`}>
+                    {hasVideo ? (
+                      <video 
+                        ref={el => {
+                          if (el && el.srcObject !== stream) {
+                            el.srcObject = stream;
+                          }
+                        }}
+                        autoPlay 
+                        playsInline 
+                        className="video-feed" 
+                      />
+                    ) : (
+                      <div className="video-placeholder other-cam">
+                        {peerId.slice(0, 4).toUpperCase()}
+                      </div>
+                    )}
+                    <div className="tile-name">
+                      User {peerId.slice(0, 4).toUpperCase()}
+                      {isMuted && <MicOff size={11} style={{marginLeft:'4px'}} color="#ef4444"/>}
+                      {isHandRaised && <span className="hand-badge" style={{marginLeft: '6px'}}>✋</span>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {/* Interactive HTML5 drawing board & sticky notes overlay */}
+          <div className="whiteboard-wrapper" ref={boardRef}>
+            <canvas 
+              ref={canvasRef}
+              className="whiteboard-canvas"
+              style={{ position: 'absolute', inset: 0, zIndex: 1 }}
+            />
+            <canvas 
+              ref={overlayCanvasRef}
+              className={`whiteboard-canvas overlay-canvas ${activeTool}-active`}
+              style={{ position: 'absolute', inset: 0, zIndex: 2 }}
+              onMouseDown={handleMouseDownCanvas}
+              onMouseMove={handleMouseMoveCanvas}
+              onMouseUp={handleMouseUpCanvas}
+              onMouseLeave={handleMouseLeaveCanvas}
+            />
+
+            {/* Whiteboard Toolbar */}
+            {isToolbarOpen && (
+              <div 
+                className="glass-card whiteboard-toolbar"
+                style={getToolbarStyle()}
+              >
+                {/* Drag Handle */}
+                <div 
+                  className="toolbar-drag-handle"
+                  onPointerDown={handleToolbarDragStart}
+                  onPointerMove={handleToolbarDragMove}
+                  onPointerUp={handleToolbarDragEnd}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '0 4px',
+                    cursor: 'grab',
+                    color: 'var(--text-secondary)',
+                    opacity: 0.6
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.color = 'var(--accent-primary)'}
+                  onMouseLeave={e => e.currentTarget.style.color = 'var(--text-secondary)'}
+                >
+                  <GripHorizontal size={18} />
+                </div>
+                <div className="tool-divider"></div>
+
+                <button title="Select / Move Sticky Notes" onClick={()=>selectTool('cursor')} className={`tool-btn bounce-hover ${activeTool==='cursor'?'active':''}`}><MousePointer2 size={18} /></button>
+                <div className="tool-divider"></div>
+                
+                <button title="Pen Drawing" onClick={()=>selectTool('pen')} className={`tool-btn bounce-hover ${activeTool==='pen'?'active':''}`}><Pen size={18} /></button>
+                <button title="Arrow Connector" onClick={()=>selectTool('arrow')} className={`tool-btn bounce-hover ${activeTool==='arrow'?'active':''}`}><ArrowUpRight size={18} /></button>
+                <button title="Line Tool" onClick={()=>selectTool('line')} className={`tool-btn bounce-hover ${activeTool==='line'?'active':''}`}><Minus size={18} /></button>
+                <button title="Eraser Brush" onClick={()=>selectTool('eraser')} className={`tool-btn bounce-hover ${activeTool==='eraser'?'active':''}`}><Eraser size={18} /></button>
+                <button title="Laser Pointer" onClick={()=>selectTool('laser')} className={`tool-btn bounce-hover ${activeTool==='laser'?'active':''}`}><Zap size={18} /></button>
+                <button title="Add Text" onClick={()=>selectTool('text')} className={`tool-btn bounce-hover ${activeTool==='text'?'active':''}`}><Type size={18} /></button>
+                <div className="tool-divider"></div>
+                
+                <button title="Rectangle Shape" onClick={()=>selectTool('shape', 'rect')} className={`tool-btn bounce-hover ${activeTool==='shape' && shapeType==='rect'?'active':''}`}><Square size={18} /></button>
+                <button title="Circle Shape" onClick={()=>selectTool('shape', 'circle')} className={`tool-btn bounce-hover ${activeTool==='shape' && shapeType==='circle'?'active':''}`}><Circle size={18} /></button>
+                <div className="tool-divider"></div>
+                
+                <div className="sticky-creators" style={{ display: 'flex', gap: '4px', padding: '2px' }}>
+                  <button title="Yellow Sticky" onClick={() => createStickyNote('yellow')} className="tool-btn bounce-hover text-yellow"><StickyNote size={18} fill="#fef08a" /></button>
+                  <button title="Pink Sticky" onClick={() => createStickyNote('pink')} className="tool-btn bounce-hover text-pink"><StickyNote size={18} fill="#fbcfe8" /></button>
+                  <button title="Blue Sticky" onClick={() => createStickyNote('blue')} className="tool-btn bounce-hover text-blue"><StickyNote size={18} fill="#93c5fd" /></button>
+                  <button title="Green Sticky" onClick={() => createStickyNote('green')} className="tool-btn bounce-hover text-green"><StickyNote size={18} fill="#86efac" /></button>
+                  <button title="Auto-Organize Board Stickies" onClick={organizeStickyNotes} className="tool-btn bounce-hover" style={{ color: 'var(--accent-primary)' }}><LayoutTemplate size={18} /></button>
+                </div>
+                <div className="tool-divider"></div>
+                
+                <button title="Undo (Ctrl+Z)" onClick={handleUndo} disabled={drawActions.length === 0} className="tool-btn bounce-hover" style={{ opacity: drawActions.length === 0 ? 0.4 : 1 }}><Undo size={18} /></button>
+                <button title="Redo (Ctrl+Y)" onClick={handleRedo} disabled={redoStack.length === 0} className="tool-btn bounce-hover" style={{ opacity: redoStack.length === 0 ? 0.4 : 1 }}><Redo size={18} /></button>
+                <div className="tool-divider"></div>
+
+                <button title="Clear Whiteboard" onClick={clearWhiteboard} className="tool-btn bounce-hover text-danger"><Trash2 size={18} /></button>
+              </div>
+            )}
+
+            {/* Brush Controls Panel (Visible when Pen/Shape/Text/Arrow/Line is active and showBrushPanel is true) */}
+            {showBrushPanel && (activeTool === 'pen' || activeTool === 'shape' || activeTool === 'eraser' || activeTool === 'text' || activeTool === 'arrow' || activeTool === 'line') && (
+              <div 
+                className="glass-card brush-controls-panel"
+                style={getBrushPanelStyle()}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                  <span className="section-label" style={{ margin: 0 }}>
+                    {activeTool === 'pen' ? 'Pen Brush' : activeTool === 'eraser' ? 'Eraser' : activeTool === 'arrow' ? 'Arrow Tool' : activeTool === 'line' ? 'Line Tool' : `Shape (${shapeType})`}
+                  </span>
+                  <button 
+                    title="Close Panel"
+                    onClick={() => setShowBrushPanel(false)}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: 'rgba(255, 255, 255, 0.4)',
+                      fontSize: '1.2rem',
+                      cursor: 'pointer',
+                      lineHeight: 1,
+                      padding: '0 4px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'color 0.2s'
+                    }}
+                    onMouseEnter={e => e.target.style.color = '#ef4444'}
+                    onMouseLeave={e => e.target.style.color = 'rgba(255, 255, 255, 0.4)'}
+                  >
+                    ×
+                  </button>
+                </div>
+                
+                {activeTool !== 'eraser' && (
+                  <div className="control-section">
+                    <span className="section-label">Color:</span>
+                    <div className="color-dots">
+                      {['#818cf8', '#ec4899', '#f43f5e', '#10b981', '#f59e0b', '#ffffff', '#000000'].map(c => (
+                        <button 
+                          key={c}
+                          style={{ backgroundColor: c }}
+                          className={`color-dot ${brushColor === c ? 'selected' : ''}`}
+                          onClick={() => {
+                            setBrushColor(c);
+                            setShowBrushPanel(false);
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div className="control-section">
+                  <span className="section-label">Size ({brushSize}px):</span>
+                  <input 
+                    type="range" 
+                    min="2" 
+                    max="32" 
+                    value={brushSize} 
+                    onChange={e => setBrushSize(parseInt(e.target.value))}
+                    onMouseUp={() => setShowBrushPanel(false)}
+                    onTouchEnd={() => setShowBrushPanel(false)}
+                    className="size-slider"
+                  />
+                  <div className="size-presets" style={{ display: 'flex', gap: '0.4rem', marginTop: '0.5rem' }}>
+                    {[4, 8, 16, 24].map(sz => (
+                      <button
+                        key={sz}
+                        className={`btn-secondary ${brushSize === sz ? 'selected-preset' : ''}`}
+                        onClick={() => {
+                          setBrushSize(sz);
+                          setShowBrushPanel(false);
+                        }}
+                        style={{
+                          padding: '2px 8px',
+                          fontSize: '0.75rem',
+                          flex: 1,
+                          textAlign: 'center',
+                          borderRadius: '6px',
+                          border: brushSize === sz ? '1px solid var(--accent-primary)' : '1px solid rgba(255, 255, 255, 0.1)',
+                          background: brushSize === sz ? 'rgba(99, 102, 241, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+                          color: brushSize === sz ? 'var(--accent-primary)' : 'var(--text-secondary)'
+                        }}
+                      >
+                        {sz}px
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Custom Inline Text Input Tool */}
+            {isTypingText && (
+              <input 
+                type="text"
+                value={textInputValue}
+                onChange={e => setTextInputValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    if (textInputValue.trim()) {
+                      const finalAction = {
+                        tool: 'text',
+                        x: textInputPosition.x,
+                        y: textInputPosition.y,
+                        text: textInputValue.trim(),
+                        color: brushColor,
+                        size: brushSize
+                      };
+                      setDrawActions(prev => {
+                        const next = [...prev, finalAction];
+                        if (ws && ws.readyState === WebSocket.OPEN) {
+                          ws.send(JSON.stringify({ type: 'draw', action: finalAction, roomId }));
+                        }
+                        setTimeout(() => redrawCanvas(next), 0);
+                        return next;
+                      });
+                      setRedoStack([]);
+                    }
+                    setIsTypingText(false);
+                  } else if (e.key === 'Escape') {
+                    setIsTypingText(false);
+                  }
+                }}
+                onBlur={() => {
+                  if (textInputValue.trim()) {
+                    const finalAction = {
+                      tool: 'text',
+                      x: textInputPosition.x,
+                      y: textInputPosition.y,
+                      text: textInputValue.trim(),
+                      color: brushColor,
+                      size: brushSize
+                    };
+                    setDrawActions(prev => {
+                      const next = [...prev, finalAction];
+                      if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({ type: 'draw', action: finalAction, roomId }));
+                      }
+                      setTimeout(() => redrawCanvas(next), 0);
+                      return next;
+                    });
+                    setRedoStack([]);
+                  }
+                  setIsTypingText(false);
+                }}
+                autoFocus
+                style={{
+                  position: 'absolute',
+                  left: `${textInputPosition.x}px`,
+                  top: `${textInputPosition.y - 12}px`,
+                  font: `bold ${brushSize * 3 + 12}px Inter, sans-serif`,
+                  color: brushColor,
+                  background: 'transparent',
+                  border: '1px dashed var(--accent-primary)',
+                  outline: 'none',
+                  padding: '2px',
+                  zIndex: 1000,
+                  caretColor: brushColor
+                }}
+              />
+            )}
+
+            <div className="static-board-content">
+              {/* Draggable Sticky Notes */}
+              {stickyNotes.map(note => (
+                <div 
+                  key={note.id} 
+                  className={`sticky-note-card ${activeTool === 'cursor' ? 'draggable' : ''}`}
+                  style={{ 
+                    transform: `translate(${note.x}px, ${note.y}px)`,
+                    backgroundColor: note.color || '#fef08a' 
+                  }}
+                  onPointerDown={(e) => handleStickyPointerDown(e, note.id)}
+                  onPointerMove={(e) => handleStickyPointerMove(e, note.id)}
+                  onPointerUp={(e) => handleStickyPointerUp(e, note.id)}
+                >
+                  <div className="sticky-note-header">
+                    <span className="note-id">Note {note.id}</span>
+                    <button 
+                      title="Delete Note" 
+                      onClick={() => deleteStickyNote(note.id)} 
+                      className="delete-note-btn"
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <textarea 
+                    value={note.text}
+                    onChange={(e) => handleStickyTextChange(note.id, e.target.value)}
+                    placeholder="Type notes here..."
+                    className="sticky-note-textarea"
+                  />
+                </div>
+              ))}
+
+              {/* Remote Cursors */}
+              {Object.keys(cursors).map(id => {
+                if (id !== clientId) {
+                  return (
+                    <div key={id} className="remote-cursor" style={{ transform: `translate(${cursors[id].x}px, ${cursors[id].y}px)` }}>
+                      <MousePointer2 size={18} fill="var(--accent-secondary)" color="var(--accent-secondary)" />
+                      <span className="cursor-label">{id.slice(0,4)}</span>
+                    </div>
+                  );
+                }
+                return null;
+              })}
+            </div>
+
+            {/* Draggable, Resizable Screen Share Window */}
+            {mediaState.screen && screenStream && (
+              <div 
+                className="glass floating-screen-share"
+                style={{
+                  left: `${screenPosition.x}px`,
+                  top: `${screenPosition.y}px`,
+                  width: `${screenSize.width}px`,
+                  height: `${screenSize.height}px`,
+                  position: 'absolute',
+                  zIndex: 1000
+                }}
+              >
+                <div 
+                  className="screen-share-header"
+                  onPointerDown={handleScreenDragStart}
+                  onPointerMove={handleScreenDragMove}
+                  onPointerUp={handleScreenDragEnd}
+                >
+                  <div className="flex-center" style={{display: 'flex', alignItems: 'center'}}>
+                    <span className="live-dot" style={{marginRight:'6px'}}></span>
+                    <span className="text-sm font-semibold">Your Screen Share</span>
+                  </div>
+                  <button className="close-btn" onClick={stopScreenShare}>×</button>
+                </div>
+                <div className="screen-share-video-wrap">
+                  <video 
+                    ref={screenVideoRefCallback}
+                    autoPlay 
+                    playsInline 
+                    muted 
+                  />
+                </div>
+                <div 
+                  className="screen-share-resize-handle"
+                  onPointerDown={handleScreenResizeStart}
+                  onPointerMove={handleScreenResizeMove}
+                  onPointerUp={handleScreenResizeEnd}
+                />
+              </div>
+            )}
+          </div>
+        </main>
+
+        {/* Right Sidebar - AI Assistant */}
+        {isAiPanelOpen && (
+          <aside 
+            className="glass-panel right-sidebar"
+            style={{
+              width: `${aiPanelWidth}px`,
+              background: theme === 'dark' ? `rgba(11, 15, 25, ${aiPanelOpacity})` : `rgba(255, 255, 255, ${aiPanelOpacity})`,
+              backdropFilter: `blur(${aiPanelBlur}px)`,
+              WebkitBackdropFilter: `blur(${aiPanelBlur}px)`
+            }}
+          >
+            <div 
+              className="sidebar-resize-handle"
+              onPointerDown={handleAiResizeStart}
+            />
+            <div className="sidebar-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3><Sparkles size={18} className="text-gradient" style={{marginRight: '0.5rem'}} /> LiveCollab AI</h3>
+              <button 
+                title="AI Panel Settings"
+                onClick={() => setShowApiKeySetting(!showApiKeySetting)} 
+                style={{ color: 'var(--text-secondary)', padding: '4px', cursor: 'pointer' }}
+                className="bounce-hover"
+              >
+                <Settings size={16} className={(geminiApiKey || hasBackendKey) ? "text-gradient" : ""} />
+              </button>
+            </div>
+            
+            {((!geminiApiKey && !hasBackendKey) || showApiKeySetting) ? (
+              <div className="ai-key-config" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.2rem', flex: 1, overflowY: 'auto' }}>
+                <h4 style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
+                  <Settings size={16} className="text-gradient" /> Panel Settings
+                </h4>
+                
+                {/* Transparency Slider */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
+                    <span>Panel Opacity</span>
+                    <span style={{ fontWeight: 600, color: 'var(--accent-primary)' }}>{Math.round(aiPanelOpacity * 100)}%</span>
+                  </div>
+                  <input 
+                    type="range"
+                    min="0.05"
+                    max="1.0"
+                    step="0.05"
+                    value={aiPanelOpacity}
+                    onChange={(e) => setAiPanelOpacity(parseFloat(e.target.value))}
+                    style={{ width: '100%', cursor: 'pointer' }}
+                  />
+                </div>
+
+                {/* Blur Slider */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
+                    <span>Glass Blur Strength</span>
+                    <span style={{ fontWeight: 600, color: 'var(--accent-primary)' }}>{aiPanelBlur}px</span>
+                  </div>
+                  <input 
+                    type="range"
+                    min="0"
+                    max="30"
+                    step="1"
+                    value={aiPanelBlur}
+                    onChange={(e) => setAiPanelBlur(parseInt(e.target.value))}
+                    style={{ width: '100%', cursor: 'pointer' }}
+                  />
+                </div>
+
+                <hr style={{ border: 'none', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', margin: '0.5rem 0' }} />
+
+                <h5 style={{ fontWeight: 600, margin: 0, fontSize: '0.85rem' }}>Gemini API Config</h5>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', lineHeight: 1.4, margin: 0 }}>
+                  If not configured on Render, enter a key starting with `AQ` or `AIzaSy`.
+                </p>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <input 
+                    type="password" 
+                    placeholder={geminiApiKey ? "••••••••••••••••" : "Paste your API key here..."} 
+                    value={tempApiKey}
+                    onChange={e => setTempApiKey(e.target.value)}
+                    className="input-glass"
+                    style={{ width: '100%' }}
+                  />
+                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.3rem' }}>
+                    <button 
+                      onClick={() => {
+                        if (tempApiKey.trim()) {
+                          localStorage.setItem('livecollab_gemini_key', tempApiKey.trim());
+                          setGeminiApiKey(tempApiKey.trim());
+                          setTempApiKey('');
+                          setShowApiKeySetting(false);
+                        }
+                      }} 
+                      className="btn-primary" 
+                      style={{ flex: 1, padding: '0.5rem 1rem', fontSize: '0.85rem' }}
+                    >
+                      Save Key
+                    </button>
+                    {geminiApiKey && (
+                      <button 
+                        onClick={() => {
+                          localStorage.removeItem('livecollab_gemini_key');
+                          setGeminiApiKey('');
+                          setTempApiKey('');
+                        }} 
+                        className="btn-danger" 
+                        style={{ padding: '0.5rem 1rem', fontSize: '0.85rem', background: 'rgba(239, 68, 68, 0.1)', flex: 1 }}
+                      >
+                        Clear Key
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div style={{ marginTop: 'auto', display: 'flex', gap: '0.5rem' }}>
+                  <button 
+                    onClick={() => {
+                      setShowApiKeySetting(false);
+                      setTempApiKey('');
+                    }} 
+                    className="btn-secondary" 
+                    style={{ padding: '0.5rem 1rem', fontSize: '0.85rem', width: '100%' }}
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="ai-prompts">
+                  <button className="ai-btn bounce-hover" onClick={() => simulateAiResponse('summary')}><FileText size={14}/> Summarize Board</button>
+                  <button className="ai-btn bounce-hover" onClick={() => simulateAiResponse('tasks')}><ListTodo size={14}/> Create Tasks</button>
+                  <button className="ai-btn bounce-hover" onClick={() => simulateAiResponse('notes')}><CheckSquare size={14}/> Generate Notes</button>
+                </div>
+
+                {/* Quick Agentic AI Presets */}
+                <div className="quick-agent-presets">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px', width: '100%', marginBottom: '2px' }}>
+                    <Bot size={13} style={{ color: 'var(--accent-primary)' }} />
+                    <span style={{ fontSize: '0.74rem', color: 'var(--accent-primary)', fontWeight: 600 }}>Agentic Actions:</span>
+                  </div>
+                  <button type="button" className="quick-agent-pill" onClick={() => triggerAgentPreset('photosynthesis')} title="Generate Photosynthesis Flowchart">
+                    🌿 Flowchart
+                  </button>
+                  <button type="button" className="quick-agent-pill" onClick={() => triggerAgentPreset('kanban')} title="Generate Agile Sprint Kanban Board">
+                    📋 Sprint Kanban
+                  </button>
+                  <button type="button" className="quick-agent-pill" onClick={() => triggerAgentPreset('swot')} title="Generate SWOT Strategic Matrix">
+                    📊 SWOT Matrix
+                  </button>
+                  <button type="button" className="quick-agent-pill" onClick={() => triggerAgentPreset('brainstorm')} title="Generate Brainstorming Stickies">
+                    💡 Ideate Stickies
+                  </button>
+                  <button type="button" className="quick-agent-pill" onClick={() => triggerAgentPreset('organize')} title="Clean & Align all stickies">
+                    🧹 Clean Board
+                  </button>
+                </div>
+
+                <div className="ai-chat">
+                  <div className="ai-chat-history" ref={aiChatHistoryRef}>
+                    {aiMessages.map((msg, index) => (
+                      <div key={index} className={`message ${msg.role === 'user' ? 'me' : 'ai-msg'}`}>
+                        <span className="sender-name">{msg.role === 'user' ? 'You' : 'LiveCollab AI'}</span>
+                        <div className="bubble" style={{ textAlign: 'left' }}>
+                          {renderMarkdown(msg.text, executeAgentAction, appliedActionIds)}
+                        </div>
+                      </div>
+                    ))}
+                    {isAiLoading && (
+                      <div className="ai-typing-loader">
+                        <span></span><span></span><span></span>
+                      </div>
+                    )}
+                    <div ref={aiBottomRef} />
+                  </div>
+                  <form onSubmit={handleAiSend} className="ai-input-area">
+                    <div className="input-group">
+                      <input 
+                        type="text" 
+                        value={aiInput}
+                        onChange={e => setAiInput(e.target.value)}
+                        placeholder="Ask AI or speak your prompt..." 
+                        className="input-glass" 
+                        disabled={isAiLoading}
+                      />
+                      <button 
+                        type="button" 
+                        className={`btn-mic ${isListening ? 'listening' : ''}`}
+                        onClick={toggleSpeechRecognition}
+                        title={isListening ? "Listening... click to stop" : "Voice Dictation (Speech-to-Prompt)"}
+                      >
+                        <Mic size={16} />
+                      </button>
+                      <button type="submit" className="btn-send" disabled={isAiLoading}><Send size={16} /></button>
+                    </div>
+                  </form>
+                </div>
+              </>
+            )}
+          </aside>
+        )}
+      </div>
+
+      {/* Bottom Control Bar */}
+      <footer className="glass control-bar">
+        <div className="control-group">
+          <button 
+            title={isLeftSidebarOpen ? "Hide Chat Sidebar" : "Show Chat Sidebar"} 
+            className={`control-btn text-btn bounce-hover ${isLeftSidebarOpen ? 'active-toggle' : ''}`} 
+            onClick={() => setIsLeftSidebarOpen(!isLeftSidebarOpen)}
+            style={{ position: 'relative' }}
+          >
+            <MessageSquare size={18} style={{marginRight:'0.4rem'}}/> Chat
+            {unreadChats > 0 && (
+              <span className="notification-badge">{unreadChats}</span>
+            )}
+          </button>
+          <button 
+            title={isToolbarOpen ? "Hide Whiteboard Tools" : "Show Whiteboard Tools"} 
+            className={`control-btn text-btn bounce-hover ${isToolbarOpen ? 'active-toggle' : ''}`} 
+            onClick={() => setIsToolbarOpen(!isToolbarOpen)}
+          >
+            <Pen size={18} style={{marginRight:'0.4rem'}}/> Tools
+          </button>
+          <button 
+            title={isVideoStripVisible ? "Hide Video Feeds" : "Show Video Feeds"} 
+            className={`control-btn text-btn bounce-hover ${isVideoStripVisible ? 'active-toggle' : ''}`} 
+            onClick={() => setIsVideoStripVisible(!isVideoStripVisible)}
+          >
+            <Video size={18} style={{marginRight:'0.4rem'}}/> Feeds
+          </button>
+        </div>
+        
+        <div className="control-group center-controls">
+          <button title="Toggle Microphone" className={`control-btn bounce-hover ${!mediaState.mic ? 'muted' : ''}`} onClick={() => toggleMedia('mic')}>
+            {mediaState.mic ? <Mic size={22} /> : <MicOff size={22} />}
+          </button>
+          <button title="Toggle Video Cam" className={`control-btn bounce-hover ${!mediaState.camera ? 'muted' : ''}`} onClick={() => toggleMedia('camera')}>
+            {mediaState.camera ? <Video size={22} /> : <VideoOff size={22} />}
+          </button>
+          <button title="Share Screen" className={`control-btn bounce-hover ${mediaState.screen ? 'active-share' : ''}`} onClick={() => toggleMedia('screen')}>
+            <MonitorUp size={22} />
+          </button>
+          <button 
+            title="Raise Hand" 
+            className={`control-btn bounce-hover ${handRaised ? 'active-hand' : ''}`} 
+            onClick={toggleRaiseHand}
+          >
+            <Hand size={22} />
+          </button>
+          
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+            <button 
+              title="More Options" 
+              className={`control-btn bounce-hover ${isMoreMenuOpen ? 'active-more' : ''}`} 
+              onClick={() => setIsMoreMenuOpen(!isMoreMenuOpen)}
+            >
+              <MoreHorizontal size={22} />
+            </button>
+            {isMoreMenuOpen && (
+              <div className="glass more-options-menu">
+                <button className="menu-item" onClick={exportBoardAsPng}>
+                  <Download size={16} style={{marginRight: '8px'}} /> Export Board as PNG
+                </button>
+                <button className="menu-item" onClick={() => {
+                  const nextGrids = { 'dotted': 'lines', 'lines': 'none', 'none': 'dotted' };
+                  setGridType(nextGrids[gridType]);
+                  setIsMoreMenuOpen(false);
+                }}>
+                  <Grid size={16} style={{marginRight: '8px'}} /> Grid: {gridType.toUpperCase()}
+                </button>
+                <button className="menu-item text-danger" onClick={() => { setIsMoreMenuOpen(false); clearWhiteboard(); }}>
+                  <Trash2 size={16} style={{marginRight: '8px'}} /> Clear Whiteboard
+                </button>
+              </div>
+            )}
+          </div>
+
+          <button title="End Session" className="control-btn end-call bounce-hover" onClick={() => navigate('/dashboard')}><PhoneOff size={22} /></button>
+        </div>
+
+        <div className="control-group right-controls" style={{ gap: '0.5rem' }}>
+          <button 
+            title="Toggle AI Panel" 
+            className={`control-btn text-btn bounce-hover ${isAiPanelOpen ? 'active-toggle' : ''}`} 
+            onClick={() => setIsAiPanelOpen(!isAiPanelOpen)}
+            style={{ position: 'relative' }}
+          >
+            <Sparkles size={18} style={{marginRight:'0.4rem'}}/> AI
+            {unreadAi && (
+              <span className="notification-dot"></span>
+            )}
+          </button>
+          <button 
+            title={theme === 'light' ? "Switch to Dark Mode" : "Switch to Light Mode"} 
+            className="control-btn bounce-hover"
+            onClick={toggleTheme}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          >
+            {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
+          </button>
+          <button 
+            title="Settings" 
+            className="control-btn bounce-hover"
+            onClick={() => {
+              const newName = prompt("Enter your name:", JSON.parse(localStorage.getItem('user') || '{}').name || "User");
+              if (newName) {
+                const userObj = JSON.parse(localStorage.getItem('user') || '{}');
+                userObj.name = newName;
+                localStorage.setItem('user', JSON.stringify(userObj));
+                alert("Username updated to: " + newName);
+                window.location.reload();
+              }
+            }}
+          >
+            <Settings size={20} />
+          </button>
+        </div>
+      </footer>
+    </div>
+  );
+};
+
+export default Room;
