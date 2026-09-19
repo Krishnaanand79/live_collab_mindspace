@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  MonitorSpeaker, ArrowLeft, Download, PlayCircle, Clock, Calendar as CalendarIcon, 
-  Filter, Search, Sparkles, Inbox, Share2, Tag, Check, ArrowUpRight
+  Download, PlayCircle, Clock, Calendar as CalendarIcon, 
+  Filter, Search, Sparkles, Inbox, Share2, ArrowUpRight
 } from 'lucide-react';
 import { apiBaseUrl } from '../config';
+import Navbar from '../components/Navbar';
+import CommandPalette from '../components/CommandPalette';
 import './History.css';
 import './Dashboard.css';
 
@@ -15,11 +17,23 @@ const History = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('all');
   const [copyToast, setCopyToast] = useState('');
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
 
   const triggerToast = (msg) => {
     setCopyToast(msg);
     setTimeout(() => setCopyToast(''), 3000);
   };
+
+  useEffect(() => {
+    const handleGlobalKeyDown = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsSearchOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, []);
 
   useEffect(() => {
     const fetchHistory = async () => {
@@ -81,6 +95,20 @@ ${session.aiSummary || 'No summary recorded.'}
 
   return (
     <div className="history-container">
+      {/* Top Enterprise Navbar */}
+      <Navbar 
+        onOpenSearch={() => setIsSearchOpen(true)}
+        onNewRoom={() => navigate('/room')}
+      />
+
+      {/* Global Command Palette */}
+      <CommandPalette 
+        isOpen={isSearchOpen}
+        onClose={() => setIsSearchOpen(false)}
+        onOpenJoinModal={() => navigate('/dashboard')}
+        onNewRoom={() => navigate('/room')}
+      />
+
       {/* Floating Toast */}
       {copyToast && (
         <div className="dashboard-toast">
@@ -88,18 +116,6 @@ ${session.aiSummary || 'No summary recorded.'}
           <span>{copyToast}</span>
         </div>
       )}
-
-      {/* Header */}
-      <nav className="glass history-navbar">
-        <div className="navbar-left">
-          <button className="icon-btn glass-panel" onClick={() => navigate('/dashboard')} aria-label="Back to dashboard">
-            <ArrowLeft size={20} />
-          </button>
-          <h2 className="logo" style={{ marginLeft: '0.8rem' }} onClick={() => navigate('/dashboard')}>
-            <img src="/logo.png" alt="LiveCollab" style={{ height: '34px' }} />
-          </h2>
-        </div>
-      </nav>
 
       <main className="history-main">
         {/* Header with Title & Live Search */}

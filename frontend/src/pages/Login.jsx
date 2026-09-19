@@ -1,12 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Mail, Lock, LogIn, Key, Sparkles, AlertCircle, CheckCircle, X, Zap, Eye, EyeOff, ShieldCheck, MousePointer, Activity } from 'lucide-react';
+import { Mail, Lock, LogIn, Key, Sparkles, AlertCircle, CheckCircle, X, Zap, Eye, EyeOff, ShieldCheck, MousePointer, Activity, Sun, Moon } from 'lucide-react';
 import { GoogleLogin } from '@react-oauth/google';
 import { apiBaseUrl } from '../config';
+import { ThemeContext } from '../App';
+import BrandLogo from '../components/BrandLogo';
 import './Login.css';
 
 const Login = () => {
   const navigate = useNavigate();
+  const { theme, toggleTheme } = useContext(ThemeContext) || { theme: 'dark', toggleTheme: () => {} };
   const [roomCode, setRoomCode] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
   const [name, setName] = useState('');
@@ -140,6 +143,18 @@ const Login = () => {
 
   return (
     <div className="login-split-container">
+      {/* Top Floating Controls */}
+      <div className="login-top-bar">
+        <button 
+          className="theme-toggle-btn login-theme-toggle" 
+          onClick={toggleTheme}
+          title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
+          aria-label="Toggle Dark and Light Theme"
+        >
+          {theme === 'dark' ? <Sun size={18} className="theme-icon sun" /> : <Moon size={18} className="theme-icon moon" />}
+        </button>
+      </div>
+
       {/* Left side: Enterprise Product Showcase */}
       <div className="login-hero-side">
         <div className="hero-overlay"></div>
@@ -148,11 +163,11 @@ const Login = () => {
         <div className="hero-content">
           <div className="hero-badge-pill">
             <span className="pulse-dot"></span>
-            <span>MINDSPACE ENTERPRISE • AI WHITEBOARD OS</span>
+            <span>LIVECOLLAB MINDSPACE • NEXT-GEN AI WHITEBOARD</span>
           </div>
 
-          <div className="hero-logo-wrap">
-            <img src="/logo.png" alt="LiveCollab" />
+          <div className="hero-brand-wrap">
+            <BrandLogo size={52} showText={true} showBadge={true} />
           </div>
 
           <h1 className="hero-headline">
@@ -160,7 +175,7 @@ const Login = () => {
             <span className="text-gradient">co-create with Agentic AI.</span>
           </h1>
           <p className="hero-subtitle">
-            Combines ultra-smooth 60 FPS multiplayer canvas, crystal-clear WebRTC audio/video, and an intelligent Gemini whiteboard co-pilot.
+            Combines ultra-smooth 60 FPS multiplayer canvas, crystal-clear WebRTC collaboration, and an intelligent Gemini whiteboard co-pilot.
           </p>
 
           {/* Interactive Simulated Product Canvas */}
@@ -224,7 +239,7 @@ const Login = () => {
       <div className="login-form-side">
         <div className="login-form-wrapper">
           <div className="login-header-mobile">
-            <img src="/logo.png" alt="LiveCollab AI" style={{ height: '70px', objectFit: 'contain' }} />
+            <BrandLogo size={42} showText={true} showBadge={true} />
           </div>
 
           <div className="auth-tab-selector" role="tablist">
@@ -348,7 +363,7 @@ const Login = () => {
             <GoogleLogin
               onSuccess={handleGoogleSuccess}
               onError={handleGoogleError}
-              theme="filled_black"
+              theme={theme === 'dark' ? 'filled_black' : 'outline'}
               shape="pill"
               size="large"
             />

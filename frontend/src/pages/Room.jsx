@@ -2550,23 +2550,24 @@ const Room = () => {
       )}
       {/* Top Bar */}
       <header className="glass room-top-bar">
-        <div className="room-info" style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+        <div className="room-info" style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
           <img 
             src="/logo.png" 
-            alt="LiveCollab" 
+            alt="LiveCollab MindSpace" 
             style={{ 
-              height: '32px', 
-              width: 'auto', 
-              backgroundColor: theme === 'dark' ? '#ffffff' : 'transparent', 
-              padding: '4px', 
-              borderRadius: '8px', 
-              boxShadow: theme === 'dark' ? '0 2px 8px rgba(0, 0, 0, 0.2)' : 'none',
-              objectFit: 'contain'
+              height: '34px', 
+              width: '34px', 
+              borderRadius: '50%',
+              boxShadow: '0 2px 10px rgba(0, 240, 255, 0.35)',
+              objectFit: 'contain',
+              cursor: 'pointer'
             }} 
+            onClick={() => navigate('/dashboard')}
+            title="Back to Dashboard"
           />
           <div className="room-title">
-            <h2 className="text-gradient">Board: {roomId}</h2>
-            <span className="live-badge">LIVE</span>
+            <h2 className="text-gradient">Space: {roomId}</h2>
+            <span className="live-badge">LIVE SYNC</span>
           </div>
           {joinError && <p className="text-secondary text-sm">{joinError}</p>}
         </div>
@@ -2584,6 +2585,14 @@ const Room = () => {
           </button>
           <button className="btn-primary btn-sm flex-center" onClick={copyRoomLink}>
             <UserPlus size={16} style={{ marginRight: '0.4rem' }} /> Invite
+          </button>
+          <button 
+            className="icon-btn-sm" 
+            onClick={toggleTheme}
+            title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
+            style={{ padding: '0.4rem', borderRadius: '50%', background: 'var(--panel-bg-elevated)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+          >
+            {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
           </button>
           <button className="btn-danger btn-sm" onClick={() => navigate('/dashboard')}>End Session</button>
         </div>

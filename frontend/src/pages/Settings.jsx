@@ -1,10 +1,12 @@
-import React, { useContext, useState } from 'react';
+import React, { useContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  ArrowLeft, User, Video, Mic, Bell, Sparkles, MonitorSpeaker, CheckCircle2, 
-  Volume2, ShieldCheck, Sun, Moon, Cpu, Zap, Check, Sliders
+  User, Video, Mic, Bell, Sparkles, CheckCircle2, 
+  Volume2, Sun, Moon, Check
 } from 'lucide-react';
 import { ThemeContext } from '../App';
+import Navbar from '../components/Navbar';
+import CommandPalette from '../components/CommandPalette';
 import './Settings.css';
 
 const AI_PERSONAS = [
@@ -33,8 +35,9 @@ const AI_PERSONAS = [
 
 const Settings = () => {
   const navigate = useNavigate();
-  const { theme, toggleTheme } = useContext(ThemeContext);
+  const { theme, toggleTheme } = useContext(ThemeContext) || { theme: 'dark', toggleTheme: () => {} };
   const [activeTab, setActiveTab] = useState('profile');
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
 
   const [displayName, setDisplayName] = useState(() => {
     const saved = JSON.parse(localStorage.getItem('user') || '{}');
@@ -51,6 +54,17 @@ const Settings = () => {
     return localStorage.getItem('livecollab_ai_persona') || 'agentic';
   });
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  useEffect(() => {
+    const handleGlobalKeyDown = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsSearchOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, []);
 
   const handleSave = (e) => {
     if (e) e.preventDefault();
@@ -76,23 +90,25 @@ const Settings = () => {
 
   return (
     <div className="settings-container">
-      {/* Header */}
-      <nav className="glass history-navbar">
-        <div className="navbar-left">
-          <button className="icon-btn glass-panel" onClick={() => navigate('/dashboard')} aria-label="Back to dashboard">
-            <ArrowLeft size={20} />
-          </button>
-          <h2 className="logo" style={{ marginLeft: '0.8rem' }} onClick={() => navigate('/dashboard')}>
-            <img src="/logo.png" alt="LiveCollab" style={{ height: '34px' }} />
-          </h2>
-        </div>
-      </nav>
+      {/* Top Enterprise Navbar */}
+      <Navbar 
+        onOpenSearch={() => setIsSearchOpen(true)}
+        onNewRoom={() => navigate('/room')}
+      />
+
+      {/* Global Command Palette */}
+      <CommandPalette 
+        isOpen={isSearchOpen}
+        onClose={() => setIsSearchOpen(false)}
+        onOpenJoinModal={() => navigate('/dashboard')}
+        onNewRoom={() => navigate('/room')}
+      />
 
       <main className="settings-main">
         <header className="page-header">
           <div className="welcome-badge">
             <span className="pulse-dot"></span>
-            <span>SYSTEM & WORKSPACE PREFERENCES</span>
+            <span>LIVECOLLAB MINDSPACE • STUDIO PREFERENCES</span>
           </div>
           <h1>Settings</h1>
           <p className="text-secondary">Manage your profile, AI Co-Pilot personality, and studio devices.</p>
@@ -237,8 +253,8 @@ const Settings = () => {
                   <div className="form-group">
                     <label>Microphone Selection</label>
                     <select className="input-glass">
-                      <option>MacBook Pro Microphone Array</option>
-                      <option>USB Studio Condenser Mic</option>
+                      <option>Integrated Studio Microphone Array</option>
+                      <option>USB Condenser Podcast Mic</option>
                     </select>
                   </div>
                 </div>
@@ -299,17 +315,6 @@ const Settings = () => {
                     <span className="slider"></span>
                   </label>
                 </div>
-
-                <div className="setting-row">
-                  <div>
-                    <h4>Multiplayer Cursor Sounds</h4>
-                    <p className="text-secondary text-sm">Play subtle audio click when team members connect</p>
-                  </div>
-                  <label className="toggle-switch">
-                    <input type="checkbox" defaultChecked />
-                    <span className="slider"></span>
-                  </label>
-                </div>
               </div>
             )}
 
@@ -317,23 +322,20 @@ const Settings = () => {
             {activeTab === 'ai' && (
               <div className="settings-section">
                 <div className="section-title-wrap">
-                  <h3 className="flex-align" style={{ gap: '0.5rem' }}>
-                    <Sparkles size={20} className="text-gradient" /> AI Preferences & Personas
-                  </h3>
-                  <p className="text-secondary text-xs">Select how Gemini AI should assist your team on the canvas.</p>
+                  <h3>Agentic AI Co-Pilot Preferences</h3>
+                  <p className="text-secondary text-xs">Choose how the Gemini AI Co-Pilot assists during live whiteboard sessions.</p>
                 </div>
 
-                {/* AI Persona Selector Cards */}
-                <div className="persona-cards-grid">
+                <div className="persona-selection-grid">
                   {AI_PERSONAS.map(p => (
                     <div 
-                      key={p.id}
+                      key={p.id} 
                       className={`persona-card glass-card ${aiPersona === p.id ? 'active' : ''}`}
                       onClick={() => setAiPersona(p.id)}
                     >
                       <div className="persona-card-header">
                         <span className="persona-icon">{p.icon}</span>
-                        <span className="badge badge-primary" style={{ fontSize: '0.7rem' }}>{p.badge}</span>
+                        <span className="badge badge-primary">{p.badge}</span>
                       </div>
                       <h4>{p.title}</h4>
                       <p className="text-secondary text-xs">{p.desc}</p>
@@ -346,21 +348,22 @@ const Settings = () => {
                   ))}
                 </div>
 
-                <div className="setting-row" style={{ marginTop: '2rem' }}>
+                <h4 style={{marginTop: '2rem', marginBottom: '1rem'}}>AI Autonomy & Triggers</h4>
+                <div className="setting-row">
                   <div>
                     <h4>Auto-Summarize Meetings</h4>
-                    <p className="text-secondary text-sm">AI will automatically generate notes at the end of a session</p>
+                    <p className="text-secondary text-sm">Automatically generate structured notes when everyone leaves</p>
                   </div>
                   <label className="toggle-switch">
                     <input type="checkbox" defaultChecked />
                     <span className="slider"></span>
                   </label>
                 </div>
-                
+
                 <div className="setting-row">
                   <div>
                     <h4>Action Items Extraction</h4>
-                    <p className="text-secondary text-sm">Identify tasks and assignments from spoken words</p>
+                    <p className="text-secondary text-sm">Highlight assigned tasks and owners with checkboxes</p>
                   </div>
                   <label className="toggle-switch">
                     <input type="checkbox" defaultChecked />

@@ -800,3 +800,47 @@
   0% { background-position: 100% 0; }
   100% { background-position: -100% 0; }
 }
+
+/* Light Theme Precision Overrides */
+[data-theme='light'] .kpi-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+}
+
+[data-theme='light'] .kpi-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme='light'] .template-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+}
+
+[data-theme='light'] .template-card:hover {
+  border-color: #94a3b8;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme='light'] .room-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+}
+
+[data-theme='light'] .room-card:hover {
+  border-color: #94a3b8;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme='light'] .history-preview-item {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+}
+
+[data-theme='light'] .join-modal {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.15);
+}
+

@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  Search, Plus, Users, MonitorSpeaker, Clock, ArrowRight, Play, Sun, Moon, Inbox, 
-  Key, X, Sparkles, AlertCircle, Bell, ChevronDown, Check, TrendingUp, Cpu, 
-  Layout, Copy, ExternalLink, Zap, Layers, Activity, ShieldCheck
+  Plus, Users, MonitorSpeaker, Clock, ArrowRight, Play, Inbox, 
+  Key, X, Sparkles, AlertCircle, TrendingUp, Copy, ExternalLink, Zap, Layers, Activity, ShieldCheck
 } from 'lucide-react';
 import { ThemeContext } from '../App';
 import { apiBaseUrl } from '../config';
+import Navbar from '../components/Navbar';
+import CommandPalette from '../components/CommandPalette';
 import './Dashboard.css';
 
 const TEMPLATES = [
@@ -16,7 +17,8 @@ const TEMPLATES = [
     category: 'Productivity',
     desc: '3-stage Kanban pipeline with backlog, in-progress & review stickies.',
     icon: '📋',
-    color: '#3b82f6'
+    color: '#3b82f6',
+    routeParam: 'kanban'
   },
   {
     id: 'flowchart',
@@ -24,7 +26,8 @@ const TEMPLATES = [
     category: 'Engineering',
     desc: 'Microservices flow with API Gateway, Auth, & Redis cache vectors.',
     icon: '⚡',
-    color: '#8b5cf6'
+    color: '#8b5cf6',
+    routeParam: 'architecture'
   },
   {
     id: 'swot',
@@ -32,7 +35,8 @@ const TEMPLATES = [
     category: 'Strategy',
     desc: '4-quadrant strategic workspace for strengths, risks & opportunities.',
     icon: '📊',
-    color: '#10b981'
+    color: '#10b981',
+    routeParam: 'swot'
   },
   {
     id: 'brainstorm',
@@ -40,23 +44,21 @@ const TEMPLATES = [
     category: 'Design & Brainstorm',
     desc: 'Color-coded dynamic sticky cluster for high-velocity team ideation.',
     icon: '💡',
-    color: '#ec4899'
+    color: '#ec4899',
+    routeParam: 'cluster'
   }
 ];
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { theme, toggleTheme } = useContext(ThemeContext);
+  const { theme } = useContext(ThemeContext) || { theme: 'dark' };
   
   const [recentRooms, setRecentRooms] = useState([]);
   const [history, setHistory] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [showDropdown, setShowDropdown] = useState(false);
-  const [showWorkspaceMenu, setShowWorkspaceMenu] = useState(false);
-  const [currentWorkspace, setCurrentWorkspace] = useState('Personal Workspace');
-  const [searchQuery, setSearchQuery] = useState('');
   const [isCreatingRoom, setIsCreatingRoom] = useState(false);
   const [userName, setUserName] = useState('Collaborator');
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
 
   // Modal & Toast states
   const [showJoinModal, setShowJoinModal] = useState(false);
@@ -77,6 +79,17 @@ const Dashboard = () => {
     if (savedUser?.name) {
       setUserName(savedUser.name);
     }
+  }, []);
+
+  useEffect(() => {
+    const handleGlobalKeyDown = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsSearchOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, []);
 
   useEffect(() => {
@@ -103,7 +116,7 @@ const Dashboard = () => {
     fetchData();
   }, []);
 
-  const createRoom = async (title = 'New Brainstorm Session') => {
+  const createRoom = async (title = 'New Brainstorm Session', templateParam = '') => {
     if (isCreatingRoom) return;
 
     setIsCreatingRoom(true);
@@ -116,7 +129,8 @@ const Dashboard = () => {
 
       const data = await response.json();
       if (data.success) {
-        navigate(`/room/${data.roomId}`);
+        const url = templateParam ? `/room/${data.roomId}?template=${templateParam}` : `/room/${data.roomId}`;
+        navigate(url);
       } else {
         showToast(`Could not create room: ${data.error || 'Unknown error'}`);
       }
@@ -164,18 +178,22 @@ const Dashboard = () => {
     showToast(`🔗 Copied room link: ${code}`);
   };
 
-  // Filtered rooms based on search query
-  const filteredRooms = recentRooms.filter(room => {
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase();
-    return (
-      room.title?.toLowerCase().includes(q) ||
-      room.id?.toLowerCase().includes(q)
-    );
-  });
-
   return (
     <div className="dashboard-container">
+      {/* Top Enterprise Navbar */}
+      <Navbar 
+        onOpenSearch={() => setIsSearchOpen(true)}
+        onNewRoom={() => createRoom()}
+      />
+
+      {/* Global ⌘K Command Palette */}
+      <CommandPalette 
+        isOpen={isSearchOpen}
+        onClose={() => setIsSearchOpen(false)}
+        onOpenJoinModal={openJoinModal}
+        onNewRoom={() => createRoom()}
+      />
+
       {/* Animated Toast Notification */}
       {toastMessage && (
         <div className="dashboard-toast" role="status">
@@ -250,121 +268,38 @@ const Dashboard = () => {
         </div>
       )}
 
-      {/* Top Navbar */}
-      <nav className="glass navbar">
-        <div className="navbar-left">
-          <h2 className="logo" onClick={() => navigate('/dashboard')}>
-            <img src="/logo.png" alt="LiveCollab" style={{ height: '34px' }} />
-          </h2>
-
-          {/* Workspace Selector Dropdown */}
-          <div className="workspace-selector-wrap">
-            <button 
-              className="workspace-selector-btn"
-              onClick={() => setShowWorkspaceMenu(!showWorkspaceMenu)}
-            >
-              <span className="workspace-icon">⚡</span>
-              <span className="workspace-name">{currentWorkspace}</span>
-              <ChevronDown size={14} className="text-secondary" />
-            </button>
-
-            {showWorkspaceMenu && (
-              <div className="workspace-dropdown glass-card">
-                <div 
-                  className={`workspace-item ${currentWorkspace === 'Personal Workspace' ? 'selected' : ''}`}
-                  onClick={() => { setCurrentWorkspace('Personal Workspace'); setShowWorkspaceMenu(false); }}
-                >
-                  <span>⚡ Personal Workspace</span>
-                  {currentWorkspace === 'Personal Workspace' && <Check size={14} className="text-gradient" />}
-                </div>
-                <div 
-                  className={`workspace-item ${currentWorkspace === 'MindSpace Engineering HQ' ? 'selected' : ''}`}
-                  onClick={() => { setCurrentWorkspace('MindSpace Engineering HQ'); setShowWorkspaceMenu(false); }}
-                >
-                  <span>🚀 MindSpace Engineering HQ</span>
-                  {currentWorkspace === 'MindSpace Engineering HQ' && <Check size={14} className="text-gradient" />}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-        
-        <div className="navbar-center">
-          <div className="search-bar glass-panel">
-            <Search size={17} className="text-secondary" />
-            <input 
-              type="text" 
-              placeholder="Search rooms, files, or people..." 
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-            />
-            <kbd>⌘K</kbd>
-          </div>
-        </div>
-
-        <div className="navbar-right">
-          <button className="icon-btn glass-panel notification-btn" title="Notifications" onClick={() => showToast('🔔 All notifications caught up!')}>
-            <Bell size={18} />
-            <span className="notification-pulse"></span>
-          </button>
-
-          <button className="icon-btn glass-panel" onClick={toggleTheme} title="Toggle Dark/Light">
-            {theme === 'dark' ? <Sun size={19} /> : <Moon size={19} />}
-          </button>
-          
-          <button 
-            className="btn-secondary" 
-            onClick={openJoinModal}
-          >
-            Join Room
-          </button>
-          
-          <button className="btn-primary flex-center" onClick={() => createRoom()} disabled={isCreatingRoom}>
-            <Plus size={18} style={{ marginRight: '0.4rem' }} /> {isCreatingRoom ? 'Creating...' : 'New Room'}
-          </button>
-
-          <div className="avatar-dropdown" style={{position: 'relative'}}>
-            <div className="avatar glass-panel user-avatar-ring" onClick={() => setShowDropdown(!showDropdown)}>
-              <img src="https://i.pravatar.cc/150?img=11" alt="User Avatar" />
-              <span className="online-indicator"></span>
-            </div>
-            {showDropdown && (
-              <div className="glass-card avatar-popover">
-                <div className="avatar-popover-header">
-                  <strong>{userName}</strong>
-                  <span className="text-secondary text-xs">Architect • Pro Plan</span>
-                </div>
-                <div className="popover-divider"></div>
-                <button className="popover-item" onClick={() => navigate('/settings')}>Settings & Profile</button>
-                <button className="popover-item" onClick={() => navigate('/history')}>Session History</button>
-                <div className="popover-divider"></div>
-                <button className="popover-item text-danger" onClick={() => navigate('/login')}>Sign Out</button>
-              </div>
-            )}
-          </div>
-        </div>
-      </nav>
-
-      {/* Main Content */}
+      {/* Main Cockpit Content */}
       <main className="dashboard-main">
-        {/* Welcome Banner */}
+        {/* Welcome Header */}
         <header className="page-header flex-center-between">
           <div>
             <div className="welcome-badge">
               <span className="pulse-dot"></span>
-              <span>ENTERPRISE COCKPIT ACTIVE</span>
+              <span>LIVECOLLAB MINDSPACE • COMMAND COCKPIT</span>
             </div>
             <h1>Welcome back, {userName}</h1>
-            <p className="text-secondary">Ready to collaborate in real-time and leverage Agentic AI tools today?</p>
+            <p className="text-secondary">Orchestrate real-time whiteboard spaces, deploy agile templates, and co-create with Agentic AI.</p>
           </div>
           <div className="header-actions">
-            <button className="btn-secondary btn-sm" onClick={() => navigate('/history')}>
-              <Clock size={16} /> Past Meetings
+            <button 
+              className="btn-secondary flex-center" 
+              onClick={openJoinModal}
+            >
+              <Key size={17} style={{ marginRight: '0.4rem' }} />
+              <span>Join Room</span>
+            </button>
+            <button 
+              className="btn-primary flex-center" 
+              onClick={() => createRoom()} 
+              disabled={isCreatingRoom}
+            >
+              <Plus size={18} style={{ marginRight: '0.4rem' }} /> 
+              <span>{isCreatingRoom ? 'Creating...' : 'New Room'}</span>
             </button>
           </div>
         </header>
 
-        {/* Enterprise KPI Analytics Grid */}
+        {/* Enterprise KPI Metrics Ribbon */}
         <section className="kpi-grid">
           <div className="kpi-card glass-card">
             <div className="kpi-header">
@@ -423,56 +358,33 @@ const Dashboard = () => {
           </div>
         </section>
 
-        {/* Quick Actions Bar */}
-        <section className="section quick-actions">
-          <div className="glass-card action-card bounce-hover" onClick={() => createRoom()}>
-            <div className="icon-wrapper bg-gradient">
-              <Plus size={22} color="#fff" />
-            </div>
-            <h3>Create Room</h3>
-            <p className="text-secondary">Start a new blank workspace</p>
-          </div>
-          
-          <div className="glass-card action-card bounce-hover" onClick={openJoinModal}>
-            <div className="icon-wrapper">
-              <Users size={22} className="text-gradient" />
-            </div>
-            <h3>Join Room</h3>
-            <p className="text-secondary">Enter a code to join team</p>
-          </div>
-
-          <div className="glass-card action-card" onClick={() => navigate('/history')}>
-            <div className="icon-wrapper">
-              <Clock size={22} className="text-gradient" />
-            </div>
-            <h3>View History</h3>
-            <p className="text-secondary">Review previous sessions and summaries</p>
-          </div>
-        </section>
-
-        {/* 1-Click Interactive Workspace Templates */}
+        {/* 1-Click Interactive Template Launchers */}
         <section className="section">
           <div className="section-header">
             <div>
-              <h2>Template Launcher</h2>
-              <p className="text-secondary text-sm">Spin up pre-configured boards with one click.</p>
+              <h2>Template Studio</h2>
+              <p className="text-secondary text-sm">Spin up pre-architected boards instantly.</p>
             </div>
           </div>
-
-          <div className="templates-grid">
-            {TEMPLATES.map(tmpl => (
+          
+          <div className="template-grid">
+            {TEMPLATES.map(tpl => (
               <div 
-                key={tmpl.id} 
-                className="template-card glass-card bounce-hover"
-                onClick={() => createRoom(`${tmpl.title} Workspace`)}
+                key={tpl.id} 
+                className="template-card glass-card"
+                onClick={() => createRoom(tpl.title, tpl.routeParam)}
               >
                 <div className="template-card-top">
-                  <span className="template-icon" style={{ borderColor: tmpl.color }}>{tmpl.icon}</span>
-                  <span className="badge badge-primary" style={{ fontSize: '0.7rem' }}>{tmpl.category}</span>
+                  <div className="template-icon-circle" style={{ background: `${tpl.color}20`, color: tpl.color }}>
+                    <span style={{ fontSize: '1.3rem' }}>{tpl.icon}</span>
+                  </div>
+                  <span className="template-category-badge">{tpl.category}</span>
                 </div>
-                <h4>{tmpl.title}</h4>
-                <p className="text-secondary text-xs">{tmpl.desc}</p>
-                <div className="template-launch-hint flex-align">
+                
+                <h3 className="template-title">{tpl.title}</h3>
+                <p className="template-desc">{tpl.desc}</p>
+                
+                <div className="template-action-btn">
                   <span>Launch Template</span>
                   <ArrowRight size={14} />
                 </div>
@@ -481,137 +393,103 @@ const Dashboard = () => {
           </div>
         </section>
 
-        {/* Recent Collaborations */}
+        {/* Active Collaboration Rooms */}
         <section className="section">
           <div className="section-header">
             <div>
-              <h2>Recent Collaboration Rooms</h2>
-              <p className="text-secondary text-sm">Jump straight back into your active whiteboard canvases.</p>
+              <h2>Active Workspaces</h2>
+              <p className="text-secondary text-sm">Open collaborative sessions with your engineering and design peers.</p>
             </div>
-            <button className="btn-text" onClick={() => navigate('/history')}>
-              View All <ArrowRight size={16} />
-            </button>
           </div>
-          
+
           {isLoading ? (
-            <div className="recent-grid">
-              {[1, 2, 3].map(i => (
-                <div key={i} className="glass-card room-card skeleton-card">
-                  <div className="skeleton-box" style={{width: '40px', height: '40px', borderRadius: '10px'}} />
-                  <div className="skeleton-text" style={{width: '70%', marginTop: '1rem'}} />
-                  <div className="skeleton-text" style={{width: '40%'}} />
-                </div>
-              ))}
+            <div className="loading-state">
+              <div className="spinner"></div>
+              <p className="text-secondary">Syncing active workspace topology...</p>
             </div>
-          ) : filteredRooms.length > 0 ? (
-            <div className="recent-grid">
-              {filteredRooms.map((room) => (
-                <div key={room.id} className="glass-card room-card bounce-hover" onClick={() => navigate(`/room/${room.id}`)}>
+          ) : recentRooms.length === 0 ? (
+            <div className="empty-state glass-panel">
+              <Inbox size={42} className="text-secondary mb-3" />
+              <h3>No active rooms yet</h3>
+              <p className="text-secondary text-sm mb-4">Create your first collaborative canvas or join an existing team space.</p>
+              <button className="btn-primary" onClick={() => createRoom()}>
+                <Plus size={16} style={{ marginRight: '0.3rem' }} /> Create Room
+              </button>
+            </div>
+          ) : (
+            <div className="rooms-grid">
+              {recentRooms.map((room) => (
+                <div 
+                  key={room.id} 
+                  className="room-card glass-card"
+                  onClick={() => navigate(`/room/${room.id}`)}
+                >
                   <div className="room-card-header">
-                    <div className="room-icon">
-                      <MonitorSpeaker size={20} className="text-gradient" />
-                    </div>
-                    <span className="room-status active flex-align" style={{ gap: '4px' }}>
-                      <span className="pulse-dot" style={{ width: '6px', height: '6px' }}></span> {room.status}
-                    </span>
-                  </div>
-                  <h3>{room.title}</h3>
-                  <div className="room-code-tag flex-align">
-                    <span className="code-text">CODE: {room.id}</span>
+                    <span className="room-code-tag">{room.id}</span>
                     <button 
-                      className="copy-chip-btn" 
-                      title="Copy Share Link"
+                      className="room-copy-btn" 
                       onClick={(e) => copyRoomCode(room.id, e)}
+                      title="Copy room link"
                     >
                       <Copy size={13} />
                     </button>
                   </div>
+
+                  <h3 className="room-title">{room.title || 'Collaborative Whiteboard'}</h3>
+                  
                   <div className="room-card-footer">
-                    <div className="participants-stack" aria-label="participants">
-                      <div className="avatar-chip-stack">
-                        <span className="avatar-chip">👩‍💻</span>
-                        <span className="avatar-chip">👨‍🔬</span>
-                      </div>
-                      <span className="text-secondary text-xs">{room.participantCount} online</span>
+                    <div className="room-participants">
+                      <Users size={14} className="text-secondary" />
+                      <span>{room.participants || 1} online</span>
                     </div>
-                    <button className="btn-primary btn-sm" onClick={(e) => { e.stopPropagation(); navigate(`/room/${room.id}`); }}>
-                      <Play size={14} /> Open
-                    </button>
+                    <span className="room-active-time">{room.lastActive || 'Active now'}</span>
                   </div>
                 </div>
               ))}
-            </div>
-          ) : (
-            <div className="empty-state glass-panel">
-              <div className="empty-icon-wrap">
-                <Inbox size={32} className="text-secondary" />
-              </div>
-              <h3>{searchQuery ? 'No Rooms Match Search' : 'No Active Rooms'}</h3>
-              <p className="text-secondary">
-                {searchQuery 
-                  ? `No workspaces found matching "${searchQuery}".` 
-                  : "You don't have any active collaborative rooms yet. Create a blank workspace or launch a template above."}
-              </p>
-              <button className="btn-primary" onClick={() => createRoom()} style={{marginTop: '1.25rem'}}>
-                <Plus size={16} style={{marginRight:'0.4rem'}}/> Create Room
-              </button>
             </div>
           )}
         </section>
 
-        {/* History Feed */}
-        <section className="section" style={{marginBottom: '3.5rem'}}>
-          <div className="section-header">
-            <div>
-              <h2>Recent Completed Sessions</h2>
-              <p className="text-secondary text-sm">Review summaries and decisions generated by your AI Co-Pilot.</p>
+        {/* Recent Session History */}
+        {history.length > 0 && (
+          <section className="section">
+            <div className="section-header">
+              <div>
+                <h2>Recent Session Vault</h2>
+                <p className="text-secondary text-sm">Review previous collaborations, notes, and AI executive summaries.</p>
+              </div>
+              <button className="btn-secondary btn-sm" onClick={() => navigate('/history')}>
+                View All <ArrowRight size={14} style={{ marginLeft: '0.3rem' }} />
+              </button>
             </div>
-            <button className="btn-text" onClick={() => navigate('/history')}>
-              Open Full Archive <ArrowRight size={16} />
-            </button>
-          </div>
-          
-          {isLoading ? (
-            <div className="glass-panel history-list">
-              {[1, 2, 3].map(i => (
-                <div key={i} className="history-item">
-                  <div className="skeleton-box" style={{width: '40px', height: '40px', borderRadius: '10px'}} />
-                  <div style={{flex: 1, display: 'flex', flexDirection: 'column', gap:'0.5rem'}}>
-                    <div className="skeleton-text" style={{width: '40%'}} />
-                    <div className="skeleton-text" style={{width: '20%'}} />
+
+            <div className="history-preview-list">
+              {history.map(sess => (
+                <div 
+                  key={sess.id} 
+                  className="history-preview-item glass-card"
+                  onClick={() => navigate(`/room/${sess.roomId}`)}
+                >
+                  <div className="history-item-left">
+                    <div className="history-icon-circle">
+                      <Layers size={16} className="text-gradient" />
+                    </div>
+                    <div>
+                      <h4 className="history-item-title">{sess.title || 'Team Session'}</h4>
+                      <p className="history-item-meta text-secondary text-xs">
+                        {sess.date ? new Date(sess.date).toLocaleDateString() : 'Recent'} • {sess.roomId}
+                      </p>
+                    </div>
                   </div>
-                  <div className="skeleton-box" style={{flex: 2, height: '60px', borderRadius:'8px'}} />
-                </div>
-              ))}
-            </div>
-          ) : history.length > 0 ? (
-            <div className="glass-panel history-list">
-              {history.map(item => (
-                <div key={item.id} className="history-item" onClick={() => navigate(`/room/${item.roomId}`)}>
-                  <div className="history-icon">
-                    <Clock size={20} className="text-secondary" />
-                  </div>
-                  <div className="history-info">
-                    <h4>{item.title}</h4>
-                    <p className="text-secondary text-xs">
-                      {new Date(item.date).toLocaleDateString()} • {item.duration}
-                    </p>
-                  </div>
-                  <div className="history-summary">
-                    <p className="text-sm">{item.aiSummary}</p>
-                  </div>
-                  <div className="history-actions">
-                    <button className="btn-secondary btn-sm" onClick={(e) => { e.stopPropagation(); navigate('/history'); }}>
-                      Review Notes
-                    </button>
+                  <div className="history-item-right">
+                    <span className="badge badge-primary">{sess.duration || '35m'}</span>
+                    <ArrowRight size={14} className="text-secondary" />
                   </div>
                 </div>
               ))}
             </div>
-          ) : (
-             <p className="text-secondary">No collaboration history found.</p>
-          )}
-        </section>
+          </section>
+        )}
       </main>
     </div>
   );
