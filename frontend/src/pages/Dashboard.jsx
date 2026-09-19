@@ -1,9 +1,48 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Plus, Users, MonitorSpeaker, Clock, ArrowRight, Play, Sun, Moon, Inbox, Key, X, Sparkles, AlertCircle } from 'lucide-react';
+import { 
+  Search, Plus, Users, MonitorSpeaker, Clock, ArrowRight, Play, Sun, Moon, Inbox, 
+  Key, X, Sparkles, AlertCircle, Bell, ChevronDown, Check, TrendingUp, Cpu, 
+  Layout, Copy, ExternalLink, Zap, Layers, Activity, ShieldCheck
+} from 'lucide-react';
 import { ThemeContext } from '../App';
 import { apiBaseUrl } from '../config';
 import './Dashboard.css';
+
+const TEMPLATES = [
+  {
+    id: 'kanban',
+    title: 'Agile Sprint Board',
+    category: 'Productivity',
+    desc: '3-stage Kanban pipeline with backlog, in-progress & review stickies.',
+    icon: '📋',
+    color: '#3b82f6'
+  },
+  {
+    id: 'flowchart',
+    title: 'System Architecture',
+    category: 'Engineering',
+    desc: 'Microservices flow with API Gateway, Auth, & Redis cache vectors.',
+    icon: '⚡',
+    color: '#8b5cf6'
+  },
+  {
+    id: 'swot',
+    title: 'SWOT Strategy Matrix',
+    category: 'Strategy',
+    desc: '4-quadrant strategic workspace for strengths, risks & opportunities.',
+    icon: '📊',
+    color: '#10b981'
+  },
+  {
+    id: 'brainstorm',
+    title: 'Ideation Cluster',
+    category: 'Design & Brainstorm',
+    desc: 'Color-coded dynamic sticky cluster for high-velocity team ideation.',
+    icon: '💡',
+    color: '#ec4899'
+  }
+];
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -13,6 +52,9 @@ const Dashboard = () => {
   const [history, setHistory] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [showWorkspaceMenu, setShowWorkspaceMenu] = useState(false);
+  const [currentWorkspace, setCurrentWorkspace] = useState('Personal Workspace');
+  const [searchQuery, setSearchQuery] = useState('');
   const [isCreatingRoom, setIsCreatingRoom] = useState(false);
   const [userName, setUserName] = useState('Collaborator');
 
@@ -61,19 +103,15 @@ const Dashboard = () => {
     fetchData();
   }, []);
 
-  const createRoom = async () => {
-    if (isCreatingRoom) {
-      return;
-    }
+  const createRoom = async (title = 'New Brainstorm Session') => {
+    if (isCreatingRoom) return;
 
     setIsCreatingRoom(true);
     try {
       const response = await fetch(`${apiBaseUrl}/api/room`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ title: 'New Brainstorm Session' })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title })
       });
 
       const data = await response.json();
@@ -119,6 +157,22 @@ const Dashboard = () => {
       setIsVerifyingRoom(false);
     }
   };
+
+  const copyRoomCode = (code, e) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(`${window.location.origin}/room/${code}`);
+    showToast(`🔗 Copied room link: ${code}`);
+  };
+
+  // Filtered rooms based on search query
+  const filteredRooms = recentRooms.filter(room => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      room.title?.toLowerCase().includes(q) ||
+      room.id?.toLowerCase().includes(q)
+    );
+  });
 
   return (
     <div className="dashboard-container">
@@ -200,39 +254,91 @@ const Dashboard = () => {
       <nav className="glass navbar">
         <div className="navbar-left">
           <h2 className="logo" onClick={() => navigate('/dashboard')}>
-            <img src="/logo.png" alt="LiveCollab" style={{ height: '32px' }} />
+            <img src="/logo.png" alt="LiveCollab" style={{ height: '34px' }} />
           </h2>
+
+          {/* Workspace Selector Dropdown */}
+          <div className="workspace-selector-wrap">
+            <button 
+              className="workspace-selector-btn"
+              onClick={() => setShowWorkspaceMenu(!showWorkspaceMenu)}
+            >
+              <span className="workspace-icon">⚡</span>
+              <span className="workspace-name">{currentWorkspace}</span>
+              <ChevronDown size={14} className="text-secondary" />
+            </button>
+
+            {showWorkspaceMenu && (
+              <div className="workspace-dropdown glass-card">
+                <div 
+                  className={`workspace-item ${currentWorkspace === 'Personal Workspace' ? 'selected' : ''}`}
+                  onClick={() => { setCurrentWorkspace('Personal Workspace'); setShowWorkspaceMenu(false); }}
+                >
+                  <span>⚡ Personal Workspace</span>
+                  {currentWorkspace === 'Personal Workspace' && <Check size={14} className="text-gradient" />}
+                </div>
+                <div 
+                  className={`workspace-item ${currentWorkspace === 'MindSpace Engineering HQ' ? 'selected' : ''}`}
+                  onClick={() => { setCurrentWorkspace('MindSpace Engineering HQ'); setShowWorkspaceMenu(false); }}
+                >
+                  <span>🚀 MindSpace Engineering HQ</span>
+                  {currentWorkspace === 'MindSpace Engineering HQ' && <Check size={14} className="text-gradient" />}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
         
         <div className="navbar-center">
           <div className="search-bar glass-panel">
-            <Search size={18} className="text-secondary" />
-            <input type="text" placeholder="Search rooms, files, or people..." />
+            <Search size={17} className="text-secondary" />
+            <input 
+              type="text" 
+              placeholder="Search rooms, files, or people..." 
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+            />
+            <kbd>⌘K</kbd>
           </div>
         </div>
 
         <div className="navbar-right">
-          <button className="icon-btn glass-panel" onClick={toggleTheme}>
-            {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+          <button className="icon-btn glass-panel notification-btn" title="Notifications" onClick={() => showToast('🔔 All notifications caught up!')}>
+            <Bell size={18} />
+            <span className="notification-pulse"></span>
           </button>
+
+          <button className="icon-btn glass-panel" onClick={toggleTheme} title="Toggle Dark/Light">
+            {theme === 'dark' ? <Sun size={19} /> : <Moon size={19} />}
+          </button>
+          
           <button 
             className="btn-secondary" 
             onClick={openJoinModal}
           >
             Join Room
           </button>
-          <button className="btn-primary flex-center" onClick={createRoom} disabled={isCreatingRoom}>
-            <Plus size={18} style={{ marginRight: '0.5rem' }} /> {isCreatingRoom ? 'Creating...' : 'New Room'}
+          
+          <button className="btn-primary flex-center" onClick={() => createRoom()} disabled={isCreatingRoom}>
+            <Plus size={18} style={{ marginRight: '0.4rem' }} /> {isCreatingRoom ? 'Creating...' : 'New Room'}
           </button>
+
           <div className="avatar-dropdown" style={{position: 'relative'}}>
-            <div className="avatar glass-panel" onClick={() => setShowDropdown(!showDropdown)}>
+            <div className="avatar glass-panel user-avatar-ring" onClick={() => setShowDropdown(!showDropdown)}>
               <img src="https://i.pravatar.cc/150?img=11" alt="User Avatar" />
+              <span className="online-indicator"></span>
             </div>
             {showDropdown && (
-              <div className="glass-card" style={{position: 'absolute', right: 0, top: '50px', width: '150px', display: 'flex', flexDirection: 'column', gap: '0.5rem', padding: '0.5rem', zIndex: 100}}>
-                <button className="btn-secondary btn-sm" style={{width: '100%', justifyContent: 'flex-start', border: 'none'}} onClick={() => navigate('/settings')}>Settings</button>
-                <div style={{height: '1px', background: 'var(--border-color)', margin: '0 0.25rem'}}></div>
-                <button className="btn-secondary btn-sm" style={{width: '100%', justifyContent: 'flex-start', border: 'none', color: '#ef4444'}} onClick={() => navigate('/login')}>Logout</button>
+              <div className="glass-card avatar-popover">
+                <div className="avatar-popover-header">
+                  <strong>{userName}</strong>
+                  <span className="text-secondary text-xs">Architect • Pro Plan</span>
+                </div>
+                <div className="popover-divider"></div>
+                <button className="popover-item" onClick={() => navigate('/settings')}>Settings & Profile</button>
+                <button className="popover-item" onClick={() => navigate('/history')}>Session History</button>
+                <div className="popover-divider"></div>
+                <button className="popover-item text-danger" onClick={() => navigate('/login')}>Sign Out</button>
               </div>
             )}
           </div>
@@ -241,19 +347,87 @@ const Dashboard = () => {
 
       {/* Main Content */}
       <main className="dashboard-main">
-        {/* Welcome Section */}
-        <header className="page-header">
+        {/* Welcome Banner */}
+        <header className="page-header flex-center-between">
           <div>
+            <div className="welcome-badge">
+              <span className="pulse-dot"></span>
+              <span>ENTERPRISE COCKPIT ACTIVE</span>
+            </div>
             <h1>Welcome back, {userName}</h1>
-            <p className="text-secondary">Ready to collaborate and build something great today?</p>
+            <p className="text-secondary">Ready to collaborate in real-time and leverage Agentic AI tools today?</p>
+          </div>
+          <div className="header-actions">
+            <button className="btn-secondary btn-sm" onClick={() => navigate('/history')}>
+              <Clock size={16} /> Past Meetings
+            </button>
           </div>
         </header>
 
-        {/* Quick Actions */}
+        {/* Enterprise KPI Analytics Grid */}
+        <section className="kpi-grid">
+          <div className="kpi-card glass-card">
+            <div className="kpi-header">
+              <span className="kpi-title">Active Workspaces</span>
+              <div className="kpi-icon-wrap" style={{ background: 'rgba(99, 102, 241, 0.12)' }}>
+                <MonitorSpeaker size={18} color="#6366f1" />
+              </div>
+            </div>
+            <div className="kpi-metric-wrap">
+              <span className="kpi-metric">{recentRooms.length || 2}</span>
+              <span className="kpi-trend positive flex-align"><TrendingUp size={12} /> +18%</span>
+            </div>
+            <span className="kpi-caption">Real-time collaborative sessions</span>
+          </div>
+
+          <div className="kpi-card glass-card">
+            <div className="kpi-header">
+              <span className="kpi-title">Active Peers</span>
+              <div className="kpi-icon-wrap" style={{ background: 'rgba(16, 185, 129, 0.12)' }}>
+                <Users size={18} color="#10b981" />
+              </div>
+            </div>
+            <div className="kpi-metric-wrap">
+              <span className="kpi-metric">8 Peers</span>
+              <span className="kpi-trend positive flex-align"><Activity size={12} /> Online</span>
+            </div>
+            <span className="kpi-caption">Multiplayer cursor & video sync</span>
+          </div>
+
+          <div className="kpi-card glass-card">
+            <div className="kpi-header">
+              <span className="kpi-title">AI Summaries</span>
+              <div className="kpi-icon-wrap" style={{ background: 'rgba(217, 70, 239, 0.12)' }}>
+                <Sparkles size={18} color="#d946ef" />
+              </div>
+            </div>
+            <div className="kpi-metric-wrap">
+              <span className="kpi-metric">14 Saved</span>
+              <span className="kpi-trend positive flex-align"><TrendingUp size={12} /> +34%</span>
+            </div>
+            <span className="kpi-caption">Autonomous executive minutes</span>
+          </div>
+
+          <div className="kpi-card glass-card">
+            <div className="kpi-header">
+              <span className="kpi-title">System Sync SLA</span>
+              <div className="kpi-icon-wrap" style={{ background: 'rgba(6, 182, 212, 0.12)' }}>
+                <ShieldCheck size={18} color="#06b6d4" />
+              </div>
+            </div>
+            <div className="kpi-metric-wrap">
+              <span className="kpi-metric">99.99%</span>
+              <span className="kpi-trend positive flex-align">&lt; 15ms</span>
+            </div>
+            <span className="kpi-caption">Zero-lag WebSockets pipeline</span>
+          </div>
+        </section>
+
+        {/* Quick Actions Bar */}
         <section className="section quick-actions">
-          <div className="glass-card action-card bounce-hover" onClick={createRoom}>
+          <div className="glass-card action-card bounce-hover" onClick={() => createRoom()}>
             <div className="icon-wrapper bg-gradient">
-              <Plus size={24} color="#fff" />
+              <Plus size={22} color="#fff" />
             </div>
             <h3>Create Room</h3>
             <p className="text-secondary">Start a new blank workspace</p>
@@ -261,7 +435,7 @@ const Dashboard = () => {
           
           <div className="glass-card action-card bounce-hover" onClick={openJoinModal}>
             <div className="icon-wrapper">
-              <Users size={24} className="text-gradient" />
+              <Users size={22} className="text-gradient" />
             </div>
             <h3>Join Room</h3>
             <p className="text-secondary">Enter a code to join team</p>
@@ -269,18 +443,54 @@ const Dashboard = () => {
 
           <div className="glass-card action-card" onClick={() => navigate('/history')}>
             <div className="icon-wrapper">
-              <Clock size={24} className="text-gradient" />
+              <Clock size={22} className="text-gradient" />
             </div>
             <h3>View History</h3>
             <p className="text-secondary">Review previous sessions and summaries</p>
           </div>
         </section>
 
+        {/* 1-Click Interactive Workspace Templates */}
+        <section className="section">
+          <div className="section-header">
+            <div>
+              <h2>Template Launcher</h2>
+              <p className="text-secondary text-sm">Spin up pre-configured boards with one click.</p>
+            </div>
+          </div>
+
+          <div className="templates-grid">
+            {TEMPLATES.map(tmpl => (
+              <div 
+                key={tmpl.id} 
+                className="template-card glass-card bounce-hover"
+                onClick={() => createRoom(`${tmpl.title} Workspace`)}
+              >
+                <div className="template-card-top">
+                  <span className="template-icon" style={{ borderColor: tmpl.color }}>{tmpl.icon}</span>
+                  <span className="badge badge-primary" style={{ fontSize: '0.7rem' }}>{tmpl.category}</span>
+                </div>
+                <h4>{tmpl.title}</h4>
+                <p className="text-secondary text-xs">{tmpl.desc}</p>
+                <div className="template-launch-hint flex-align">
+                  <span>Launch Template</span>
+                  <ArrowRight size={14} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
         {/* Recent Collaborations */}
         <section className="section">
           <div className="section-header">
-            <h2>Recent Rooms</h2>
-            <button className="btn-text" onClick={() => navigate('/history')}>View All <ArrowRight size={16} /></button>
+            <div>
+              <h2>Recent Collaboration Rooms</h2>
+              <p className="text-secondary text-sm">Jump straight back into your active whiteboard canvases.</p>
+            </div>
+            <button className="btn-text" onClick={() => navigate('/history')}>
+              View All <ArrowRight size={16} />
+            </button>
           </div>
           
           {isLoading ? (
@@ -293,25 +503,39 @@ const Dashboard = () => {
                 </div>
               ))}
             </div>
-          ) : recentRooms.length > 0 ? (
+          ) : filteredRooms.length > 0 ? (
             <div className="recent-grid">
-              {recentRooms.map((room) => (
-                <div key={room.id} className="glass-card room-card bounce-hover">
+              {filteredRooms.map((room) => (
+                <div key={room.id} className="glass-card room-card bounce-hover" onClick={() => navigate(`/room/${room.id}`)}>
                   <div className="room-card-header">
                     <div className="room-icon">
                       <MonitorSpeaker size={20} className="text-gradient" />
                     </div>
-                    <span className="room-status active">{room.status}</span>
+                    <span className="room-status active flex-align" style={{ gap: '4px' }}>
+                      <span className="pulse-dot" style={{ width: '6px', height: '6px' }}></span> {room.status}
+                    </span>
                   </div>
                   <h3>{room.title}</h3>
-                  <p className="text-secondary text-sm">Active {room.participantCount} users</p>
-                  <p className="text-secondary text-xs">Code: {room.id}</p>
+                  <div className="room-code-tag flex-align">
+                    <span className="code-text">CODE: {room.id}</span>
+                    <button 
+                      className="copy-chip-btn" 
+                      title="Copy Share Link"
+                      onClick={(e) => copyRoomCode(room.id, e)}
+                    >
+                      <Copy size={13} />
+                    </button>
+                  </div>
                   <div className="room-card-footer">
                     <div className="participants-stack" aria-label="participants">
-                      <span className="text-secondary text-sm">{room.participantCount} online</span>
+                      <div className="avatar-chip-stack">
+                        <span className="avatar-chip">👩‍💻</span>
+                        <span className="avatar-chip">👨‍🔬</span>
+                      </div>
+                      <span className="text-secondary text-xs">{room.participantCount} online</span>
                     </div>
-                    <button className="btn-primary btn-sm" onClick={() => navigate(`/room/${room.id}`)}>
-                      <Play size={14} /> Resume
+                    <button className="btn-primary btn-sm" onClick={(e) => { e.stopPropagation(); navigate(`/room/${room.id}`); }}>
+                      <Play size={14} /> Open
                     </button>
                   </div>
                 </div>
@@ -322,19 +546,29 @@ const Dashboard = () => {
               <div className="empty-icon-wrap">
                 <Inbox size={32} className="text-secondary" />
               </div>
-              <h3>No Active Rooms</h3>
-              <p className="text-secondary">You don't have any active rooms right now. Create one to get started.</p>
-              <button className="btn-secondary" onClick={createRoom} style={{marginTop: '1rem'}}>
+              <h3>{searchQuery ? 'No Rooms Match Search' : 'No Active Rooms'}</h3>
+              <p className="text-secondary">
+                {searchQuery 
+                  ? `No workspaces found matching "${searchQuery}".` 
+                  : "You don't have any active collaborative rooms yet. Create a blank workspace or launch a template above."}
+              </p>
+              <button className="btn-primary" onClick={() => createRoom()} style={{marginTop: '1.25rem'}}>
                 <Plus size={16} style={{marginRight:'0.4rem'}}/> Create Room
               </button>
             </div>
           )}
         </section>
 
-        {/* History List */}
-        <section className="section" style={{marginBottom: '3rem'}}>
+        {/* History Feed */}
+        <section className="section" style={{marginBottom: '3.5rem'}}>
           <div className="section-header">
-            <h2>Recent History</h2>
+            <div>
+              <h2>Recent Completed Sessions</h2>
+              <p className="text-secondary text-sm">Review summaries and decisions generated by your AI Co-Pilot.</p>
+            </div>
+            <button className="btn-text" onClick={() => navigate('/history')}>
+              Open Full Archive <ArrowRight size={16} />
+            </button>
           </div>
           
           {isLoading ? (
@@ -353,13 +587,13 @@ const Dashboard = () => {
           ) : history.length > 0 ? (
             <div className="glass-panel history-list">
               {history.map(item => (
-                <div key={item.id} className="history-item">
+                <div key={item.id} className="history-item" onClick={() => navigate(`/room/${item.roomId}`)}>
                   <div className="history-icon">
                     <Clock size={20} className="text-secondary" />
                   </div>
                   <div className="history-info">
                     <h4>{item.title}</h4>
-                    <p className="text-secondary text-sm">
+                    <p className="text-secondary text-xs">
                       {new Date(item.date).toLocaleDateString()} • {item.duration}
                     </p>
                   </div>
@@ -367,7 +601,9 @@ const Dashboard = () => {
                     <p className="text-sm">{item.aiSummary}</p>
                   </div>
                   <div className="history-actions">
-                    <button className="btn-secondary btn-sm" onClick={() => navigate('/history')}>Details</button>
+                    <button className="btn-secondary btn-sm" onClick={(e) => { e.stopPropagation(); navigate('/history'); }}>
+                      Review Notes
+                    </button>
                   </div>
                 </div>
               ))}

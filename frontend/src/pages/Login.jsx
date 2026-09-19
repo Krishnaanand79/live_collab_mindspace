@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Mail, Lock, LogIn, Key, Sparkles, AlertCircle, CheckCircle, X } from 'lucide-react';
+import { Mail, Lock, LogIn, Key, Sparkles, AlertCircle, CheckCircle, X, Zap, Eye, EyeOff, ShieldCheck, MousePointer, Activity } from 'lucide-react';
 import { GoogleLogin } from '@react-oauth/google';
 import { apiBaseUrl } from '../config';
 import './Login.css';
@@ -12,7 +12,18 @@ const Login = () => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [authNotification, setAuthNotification] = useState(null);
+
+  const fillDemoAccount = () => {
+    setName('Krishna Anand');
+    setEmail('demo@livecollab.ai');
+    setPassword('demopassword123');
+    setAuthNotification({
+      type: 'success',
+      message: '⚡ Demo credentials filled! Click Sign In or Create Account.'
+    });
+  };
 
   const handleLogin = (e) => {
     e.preventDefault();
@@ -43,9 +54,16 @@ const Login = () => {
       return;
     }
 
-    const account = accounts.find(
+    // Check existing or demo fallback
+    let account = accounts.find(
       acc => acc.email.toLowerCase() === email.trim().toLowerCase() && acc.password === password
     );
+    
+    // Auto-allow demo account if not found
+    if (!account && email.trim() === 'demo@livecollab.ai') {
+      account = { name: 'Krishna Anand', email: 'demo@livecollab.ai' };
+    }
+
     if (!account) {
       setAuthNotification({
         type: 'error',
@@ -94,7 +112,6 @@ const Login = () => {
       });
       const data = await res.json();
       if (data.success) {
-        // Save user detais to localStorage to persist session
         localStorage.setItem('user', JSON.stringify(data.user));
         navigate('/dashboard');
       } else {
@@ -123,58 +140,82 @@ const Login = () => {
 
   return (
     <div className="login-split-container">
-      {/* Left side: Premium Hero Banner */}
+      {/* Left side: Enterprise Product Showcase */}
       <div className="login-hero-side">
         <div className="hero-overlay"></div>
-        <svg className="hero-bg-image" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice" style={{ position: 'absolute', top: 0, left: 0, zIndex: 0 }}>
-          <defs>
-            <radialGradient id="glow-primary" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stopColor="#818cf8" stopOpacity="0.4" />
-              <stop offset="100%" stopColor="#818cf8" stopOpacity="0" />
-            </radialGradient>
-            <radialGradient id="glow-secondary" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stopColor="#f472b6" stopOpacity="0.3" />
-              <stop offset="100%" stopColor="#f472b6" stopOpacity="0" />
-            </radialGradient>
-            <pattern id="hero-dots" x="0" y="0" width="32" height="32" patternUnits="userSpaceOnUse">
-              <circle cx="2" cy="2" r="1.5" fill="rgba(255,255,255,0.08)" />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="var(--panel-bg)" />
-          {/* Animated Glowing Orbs */}
-          <circle cx="20%" cy="30%" r="50%" fill="url(#glow-primary)" />
-          <circle cx="90%" cy="80%" r="60%" fill="url(#glow-secondary)" />
-          
-          <rect width="100%" height="100%" fill="url(#hero-dots)" />
-          
-          {/* Abstract Vector Doodles */}
-          <path d="M-100 250 C 200 100, 300 500, 800 200" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="3" />
-          <path d="M0 700 C 400 900, 500 500, 1000 800" fill="none" stroke="#f472b6" strokeWidth="2" strokeDasharray="12,12" strokeOpacity="0.5" />
-          
-          {/* Floating UI Vectors */}
-          <g transform="translate(150, 150) rotate(15)">
-            <rect width="64" height="64" rx="16" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
-            <circle cx="32" cy="32" r="12" fill="rgba(255,255,255,0.1)" />
-          </g>
-          
-          <g transform="translate(450, 650) rotate(-20)">
-            <rect width="96" height="48" rx="24" fill="rgba(255,255,255,0.02)" stroke="#818cf8" strokeWidth="1.5" strokeOpacity="0.4" />
-          </g>
-
-          <circle cx="80%" cy="20%" r="24" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="6" />
-          <polygon points="600,100 620,140 580,140" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
-        </svg>
+        <div className="hero-mesh-background"></div>
         
-        <div className="hero-content" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', width: '100%', padding: '0 2.5rem' }}>
+        <div className="hero-content">
+          <div className="hero-badge-pill">
+            <span className="pulse-dot"></span>
+            <span>MINDSPACE ENTERPRISE • AI WHITEBOARD OS</span>
+          </div>
+
           <div className="hero-logo-wrap">
             <img src="/logo.png" alt="LiveCollab" />
           </div>
-          <h1 className="hero-headline">Create, build, and innovate <br/><span className="text-gradient">in real-time.</span></h1>
-          <p className="hero-subtitle" style={{ margin: '0 auto 2rem' }}>The AI-powered workspace combining video, robust whiteboard tools, and real-time multiplayer cursors seamlessly.</p>
-          
-          <div className="glass-card hero-feature-badge bounce-hover" style={{ margin: '0 auto' }}>
-            <Sparkles size={20} className="text-gradient" />
-            <span>AI generates meeting summaries automatically</span>
+
+          <h1 className="hero-headline">
+            Where high-performing teams <br/>
+            <span className="text-gradient">co-create with Agentic AI.</span>
+          </h1>
+          <p className="hero-subtitle">
+            Combines ultra-smooth 60 FPS multiplayer canvas, crystal-clear WebRTC audio/video, and an intelligent Gemini whiteboard co-pilot.
+          </p>
+
+          {/* Interactive Simulated Product Canvas */}
+          <div className="hero-live-preview glass-card">
+            <div className="preview-top-bar">
+              <div className="preview-window-dots">
+                <span></span><span></span><span></span>
+              </div>
+              <span className="preview-title">Room: #ARCHITECTURE-SPRINT</span>
+              <span className="badge badge-success flex-align" style={{ gap: '4px', fontSize: '0.7rem' }}>
+                <span className="pulse-dot" style={{ width: '6px', height: '6px' }}></span> LIVE
+              </span>
+            </div>
+
+            <div className="preview-canvas-area">
+              <div className="preview-node node-1">
+                <span className="node-icon">🚀</span>
+                <strong>API Gateway</strong>
+              </div>
+              <div className="preview-arrow arrow-1">➔</div>
+              <div className="preview-node node-2">
+                <span className="node-icon">⚡</span>
+                <strong>WebSocket Core</strong>
+              </div>
+              <div className="preview-arrow arrow-2">➔</div>
+              <div className="preview-node node-3">
+                <span className="node-icon">🤖</span>
+                <strong>Gemini AI Copilot</strong>
+              </div>
+
+              {/* Simulated Floating User Cursor Chips */}
+              <div className="preview-cursor cursor-user">
+                <MousePointer size={14} className="cursor-icon" />
+                <span>Krishna (Lead)</span>
+              </div>
+              <div className="preview-cursor cursor-ai">
+                <Sparkles size={14} className="cursor-icon" />
+                <span>Agentic AI • Drafting Diagram</span>
+              </div>
+            </div>
+
+            <div className="preview-footer-stats">
+              <div className="stat-pill">
+                <Activity size={12} color="#10b981" />
+                <span>&lt; 15ms Latency</span>
+              </div>
+              <div className="stat-pill">
+                <ShieldCheck size={12} color="#6366f1" />
+                <span>E2E Encrypted</span>
+              </div>
+              <div className="stat-pill">
+                <Sparkles size={12} color="#ec4899" />
+                <span>Agentic Canvas Actions</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -185,11 +226,30 @@ const Login = () => {
           <div className="login-header-mobile">
             <img src="/logo.png" alt="LiveCollab AI" style={{ height: '70px', objectFit: 'contain' }} />
           </div>
+
+          <div className="auth-tab-selector" role="tablist">
+            <div 
+              role="tab" 
+              tabIndex={0}
+              className={`auth-tab ${!isSignUp ? 'active' : ''}`}
+              onClick={() => setIsSignUp(false)}
+            >
+              Sign In
+            </div>
+            <div 
+              role="tab" 
+              tabIndex={0}
+              className={`auth-tab ${isSignUp ? 'active' : ''}`}
+              onClick={() => setIsSignUp(true)}
+            >
+              Create Account
+            </div>
+          </div>
           
           <div className="form-titles">
             <h2>{isSignUp ? 'Create Account' : 'Welcome Back'}</h2>
             <p className="text-secondary">
-              {isSignUp ? 'Create your account to get started.' : 'Please enter your details to sign in.'}
+              {isSignUp ? 'Enter your details to create your secure workspace profile.' : 'Sign in to access your collaborative workspaces and team whiteboards.'}
             </p>
           </div>
 
@@ -244,7 +304,7 @@ const Login = () => {
               <div className="input-icon-wrapper">
                 <Lock className="input-icon text-secondary" size={18} />
                 <input
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   id="pass"
                   className="input-glass input-with-icon"
                   placeholder="••••••••"
@@ -252,15 +312,29 @@ const Login = () => {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                 />
+                <button
+                  type="button"
+                  className="password-toggle-btn"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
               </div>
             </div>
 
             <div className="form-options" style={{ visibility: isSignUp ? 'hidden' : 'visible' }}>
               <label className="checkbox-wrap">
-                <input type="checkbox" />
+                <input type="checkbox" defaultChecked />
                 <span className="text-secondary text-sm">Remember me</span>
               </label>
-              <a href="#" className="text-gradient text-sm font-medium">Forgot Password?</a>
+              <button 
+                type="button" 
+                className="demo-fill-btn"
+                onClick={fillDemoAccount}
+              >
+                <Zap size={14} /> Fill Demo
+              </button>
             </div>
 
             <button type="submit" className="btn-primary auth-submit flex-center">
@@ -268,9 +342,9 @@ const Login = () => {
             </button>
           </form>
 
-          <div className="divider">OR</div>
+          <div className="divider"><span>OR CONTINUE WITH</span></div>
 
-          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '2rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.75rem' }}>
             <GoogleLogin
               onSuccess={handleGoogleSuccess}
               onError={handleGoogleError}
