@@ -772,9 +772,28 @@ const Room = () => {
   // WebSockets Setup
   useEffect(() => {
     if (!roomId) {
-      navigate('/dashboard');
+      fetch(`${apiBaseUrl}/api/room`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: 'Collaborative Whiteboard' })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.success && data.roomId) {
+          navigate(`/room/${data.roomId}`, { replace: true });
+        } else {
+          const fallback = Math.random().toString(36).substring(2, 8).toUpperCase();
+          navigate(`/room/${fallback}`, { replace: true });
+        }
+      })
+      .catch(() => {
+        const fallback = Math.random().toString(36).substring(2, 8).toUpperCase();
+        navigate(`/room/${fallback}`, { replace: true });
+      });
       return;
     }
+
+    localStorage.setItem('livecollab_last_room', roomId);
 
     const socket = new WebSocket(`${wsBaseUrl}/connect`);
     

@@ -12,6 +12,7 @@ import {
   Sparkles,
   Command
 } from 'lucide-react';
+import { apiBaseUrl } from '../config';
 import BrandLogo from './BrandLogo';
 import { ThemeContext } from '../App';
 import './Navbar.css';
@@ -30,6 +31,31 @@ export default function Navbar({ onOpenSearch, onNewRoom }) {
     { id: 'ws-2', name: 'MindSpace Engineering HQ', badge: 'TEAM' },
     { id: 'ws-3', name: 'AI Research Lab', badge: 'DEV' }
   ];
+
+  const handleWhiteboardClick = async (e) => {
+    e.preventDefault();
+    const lastRoom = localStorage.getItem('livecollab_last_room');
+    if (lastRoom) {
+      navigate(`/room/${lastRoom}`);
+      return;
+    }
+    try {
+      const res = await fetch(`${apiBaseUrl}/api/room`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: 'Collaborative Whiteboard' })
+      });
+      const data = await res.json();
+      if (data && data.success && data.roomId) {
+        navigate(`/room/${data.roomId}`);
+        return;
+      }
+    } catch {
+      // Fallback
+    }
+    const fallback = Math.random().toString(36).substring(2, 8).toUpperCase();
+    navigate(`/room/${fallback}`);
+  };
 
   return (
     <header className="enterprise-navbar glass">
@@ -83,6 +109,7 @@ export default function Navbar({ onOpenSearch, onNewRoom }) {
 
         <NavLink 
           to="/room" 
+          onClick={handleWhiteboardClick}
           className={({ isActive }) => `nav-link-item ${isActive ? 'active' : ''}`}
         >
           <Layers size={16} />
