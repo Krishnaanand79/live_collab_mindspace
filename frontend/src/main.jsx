@@ -6,7 +6,7 @@ import App from './App.jsx';
 
 const clientId =
   import.meta.env.VITE_GOOGLE_CLIENT_ID ||
-  '1088125896398-e392imodjudp2raq76jbjkh5f83s7hb0.apps.googleusercontent.com';
+  '1028191196816-9ikg95s5hdshpkp4dt3c3i6qi8b4ph2l.apps.googleusercontent.com';
 
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
