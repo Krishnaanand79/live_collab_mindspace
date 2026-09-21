@@ -12,10 +12,33 @@ const Room = require('./models/Room');
 const Session = require('./models/Session');
 
 const app = express();
-const allowedOrigins = process.env.CORS_ORIGIN
-  ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim()).filter(Boolean)
-  : true;
-app.use(cors({ origin: allowedOrigins }));
+
+const configuredOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim().replace(/\/+$/, '')).filter(Boolean)
+  : [];
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow non-browser requests or if CORS_ORIGIN is not set / set to *
+    if (!origin || configuredOrigins.length === 0 || configuredOrigins.includes('*')) {
+      return callback(null, true);
+    }
+    const cleanOrigin = origin.replace(/\/+$/, '');
+    const isAllowed = configuredOrigins.some(allowed => {
+      if (allowed === cleanOrigin) return true;
+      if (allowed.startsWith('*.')) {
+        const rootDomain = allowed.slice(2);
+        return cleanOrigin.endsWith('.' + rootDomain) || cleanOrigin.endsWith('://' + rootDomain);
+      }
+      return false;
+    });
+    if (isAllowed || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(cleanOrigin)) {
+      return callback(null, true);
+    }
+    return callback(null, true);
+  },
+  credentials: true
+}));
 app.use(express.json());
 
 const server = http.createServer(app);
@@ -115,6 +138,15 @@ app.post('/api/auth/google', async (req, res) => {
   }
 });
 
+app.get('/', (req, res) => {
+  res.json({
+    name: 'MindSpace LiveCollab Backend API',
+    status: 'healthy',
+    uptime: Math.floor(process.uptime()),
+    timestamp: new Date().toISOString()
+  });
+});
+
 app.get('/api/health', (req, res) => {
   const mongoReadyState = mongoose.connection.readyState;
   const mongoConnected = mongoReadyState === 1;
@@ -124,7 +156,7 @@ app.get('/api/health', (req, res) => {
     wsPath: '/connect',
     mongoConnected,
     googleConfigured: googleAudiences.length > 0,
-    corsOrigin: allowedOrigins
+    corsOrigin: configuredOrigins
   });
 });
 
@@ -675,6 +707,6 @@ function broadcast(roomId, message, excludeWs = null) {
 }
 
 const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`LiveCollab AI Server running on port ${PORT}`);
 });

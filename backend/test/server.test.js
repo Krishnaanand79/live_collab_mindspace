@@ -1,5 +1,5 @@
-import { test, describe } from 'node:test';
-import assert from 'node:assert/strict';
+const { test, describe } = require('node:test');
+const assert = require('node:assert/strict');
 
 // Test cleanLatexMath logic from backend
 function cleanLatexMath(str) {
